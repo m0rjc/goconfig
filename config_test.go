@@ -1,6 +1,7 @@
 package goconfigtools
 
 import (
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -268,5 +269,341 @@ func TestLoad_FloatTypes(t *testing.T) {
 
 	if cfg.Threshold != 0.5 {
 		t.Errorf("Expected Threshold to be 0.5, got %f", cfg.Threshold)
+	}
+}
+
+func TestLoad_MinMaxValidation_Int(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+		errMsg    string
+	}{
+		{"valid value", "8080", false, ""},
+		{"at minimum", "1024", false, ""},
+		{"at maximum", "65535", false, ""},
+		{"below minimum", "500", true, "value 500 is below minimum 1024"},
+		{"above maximum", "70000", true, "value 70000 exceeds maximum 65535"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("PORT", tt.value)
+
+			var cfg PortConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for PORT: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for PORT: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_MinMaxValidation_Uint(t *testing.T) {
+	type BufferConfig struct {
+		BufferSize uint `key:"BUFFER_SIZE" default:"1024" min:"512" max:"4096"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+		errMsg    string
+	}{
+		{"valid value", "1024", false, ""},
+		{"below minimum", "100", true, "value 100 is below minimum 512"},
+		{"above maximum", "5000", true, "value 5000 exceeds maximum 4096"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("BUFFER_SIZE", tt.value)
+
+			var cfg BufferConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for BUFFER_SIZE: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for BUFFER_SIZE: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_MinMaxValidation_Float(t *testing.T) {
+	type RatioConfig struct {
+		LoadFactor float64 `key:"LOAD_FACTOR" default:"0.75" min:"0.0" max:"1.0"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+		errMsg    string
+	}{
+		{"valid value", "0.75", false, ""},
+		{"at minimum", "0.0", false, ""},
+		{"at maximum", "1.0", false, ""},
+		{"below minimum", "-0.5", true, "value -0.500000 is below minimum 0.000000"},
+		{"above maximum", "1.5", true, "value 1.500000 exceeds maximum 1.000000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("LOAD_FACTOR", tt.value)
+
+			var cfg RatioConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for LOAD_FACTOR: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for LOAD_FACTOR: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_InvalidMinMaxTags(t *testing.T) {
+	type BadConfig struct {
+		Port int `key:"PORT" default:"8080" min:"not-a-number"`
+	}
+
+	os.Clearenv()
+
+	var cfg BadConfig
+	err := Load(&cfg)
+	if err == nil {
+		t.Fatal("Expected error for invalid min tag")
+	}
+}
+
+func TestLoad_WithValidator_RootField(t *testing.T) {
+	type SimpleConfig struct {
+		Port int `key:"PORT" default:"8080"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		validator Validator
+		shouldErr bool
+		errMsg    string
+	}{
+		{
+			name:  "passing validator",
+			value: "8080",
+			validator: func(value any) error {
+				port := value.(int64)
+				if port%10 != 0 {
+					return fmt.Errorf("port must be multiple of 10")
+				}
+				return nil
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "failing validator",
+			value: "8081",
+			validator: func(value any) error {
+				port := value.(int64)
+				if port%10 != 0 {
+					return fmt.Errorf("port must be multiple of 10")
+				}
+				return nil
+			},
+			shouldErr: true,
+			errMsg:    "port must be multiple of 10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("PORT", tt.value)
+
+			var cfg SimpleConfig
+			err := Load(&cfg, WithValidator("Port", tt.validator))
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for PORT: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for PORT: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_WithValidator_NestedField(t *testing.T) {
+	type NestedConfig struct {
+		Database struct {
+			Host string `key:"DB_HOST" default:"localhost"`
+		}
+	}
+
+	os.Clearenv()
+	os.Setenv("DB_HOST", "192.168.1.1")
+
+	var cfg NestedConfig
+	err := Load(&cfg, WithValidator("Database.Host", func(value any) error {
+		host := value.(string)
+		if host == "192.168.1.1" {
+			return fmt.Errorf("IP addresses not allowed")
+		}
+		return nil
+	}))
+
+	if err == nil {
+		t.Fatal("Expected error for IP address")
+	}
+
+	if err.Error() != "invalid value for DB_HOST: IP addresses not allowed" {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestLoad_WithValidator_MultipleValidators(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg PortConfig
+	err := Load(&cfg,
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port < 1024 {
+				return fmt.Errorf("port below 1024")
+			}
+			return nil
+		}),
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port%10 != 0 {
+				return fmt.Errorf("port must be multiple of 10")
+			}
+			return nil
+		}),
+	)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Test that first validator fails
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	var cfg2 PortConfig
+	err = Load(&cfg2,
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port < 1024 {
+				return fmt.Errorf("port below 1024")
+			}
+			return nil
+		}),
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port%10 != 0 {
+				return fmt.Errorf("port must be multiple of 10")
+			}
+			return nil
+		}),
+	)
+
+	if err == nil || err.Error() != "invalid value for PORT: port below 1024" {
+		t.Errorf("Expected first validator to fail, got %v", err)
+	}
+}
+
+func TestLoad_MinMaxAndCustomValidator(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8085")
+
+	var cfg PortConfig
+	err := Load(&cfg, WithValidator("Port", func(value any) error {
+		port := value.(int64)
+		if port%10 != 0 {
+			return fmt.Errorf("port must be multiple of 10")
+		}
+		return nil
+	}))
+
+	// Should fail custom validator (not multiple of 10)
+	if err == nil {
+		t.Fatal("Expected error for non-multiple of 10")
+	}
+	if err.Error() != "invalid value for PORT: port must be multiple of 10" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Test min validation
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	var cfg2 PortConfig
+	err = Load(&cfg2)
+	if err == nil || err.Error() != "invalid value for PORT: value 500 is below minimum 1024" {
+		t.Errorf("Expected min validation to fail, got %v", err)
+	}
+}
+
+func TestLoad_BackwardCompatibility(t *testing.T) {
+	// Ensure that existing Load(&config) calls work without options
+	os.Clearenv()
+	os.Setenv("OPENAI_API_KEY", "test-key")
+	os.Setenv("WEBHOOK_TIMEOUT", "30s")
+
+	var cfg Config
+	if err := Load(&cfg); err != nil {
+		t.Fatalf("Load without options failed: %v", err)
+	}
+
+	if cfg.AI.APIKey != "test-key" {
+		t.Errorf("Expected APIKey to be 'test-key', got %q", cfg.AI.APIKey)
 	}
 }

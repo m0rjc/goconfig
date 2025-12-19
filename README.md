@@ -62,6 +62,9 @@ func main() {
 
 - `key`: The environment variable name to read from (required)
 - `default`: The default value to use if the environment variable is not set (optional)
+- `min`: Minimum value for numeric types (optional)
+- `max`: Maximum value for numeric types (optional)
+- `required`: Set to "true" to require the field to be set (optional)
 
 ## Supported Types
 
@@ -95,6 +98,129 @@ export WEBHOOK_TIMEOUT="30s"
 # ENABLE_AI will default to "false"
 go run example/main.go
 ```
+
+## Validation
+
+### Min/Max Range Validation
+
+Use `min` and `max` struct tags to enforce numeric ranges:
+
+```go
+type ServerConfig struct {
+    Port       int     `key:"PORT" default:"8080" min:"1024" max:"65535"`
+    MaxConns   int     `key:"MAX_CONNS" default:"100" min:"1" max:"10000"`
+    LoadFactor float64 `key:"LOAD_FACTOR" default:"0.75" min:"0.0" max:"1.0"`
+}
+
+func main() {
+    var cfg ServerConfig
+    if err := goconfigtools.Load(&cfg); err != nil {
+        log.Fatalf("Configuration error: %v", err)
+    }
+    // Port is guaranteed to be between 1024 and 65535
+}
+```
+
+If a value is outside the specified range, you'll get a clear error message:
+```
+invalid value for PORT: value 500 is below minimum 1024
+```
+
+### Custom Validators
+
+Use the `WithValidator` option to add custom validation logic:
+
+```go
+type Config struct {
+    APIKey string `key:"API_KEY" required:"true"`
+    Host   string `key:"HOST" default:"localhost"`
+}
+
+func main() {
+    var cfg Config
+
+    err := goconfigtools.Load(&cfg,
+        // Validate API key format
+        goconfigtools.WithValidator("APIKey", func(value any) error {
+            key := value.(string)
+            if !strings.HasPrefix(key, "sk-") {
+                return fmt.Errorf("API key must start with 'sk-'")
+            }
+            if len(key) < 20 {
+                return fmt.Errorf("API key too short")
+            }
+            return nil
+        }),
+
+        // Validate host is not an IP address
+        goconfigtools.WithValidator("Host", func(value any) error {
+            host := value.(string)
+            if net.ParseIP(host) != nil {
+                return fmt.Errorf("host must be a hostname, not an IP address")
+            }
+            return nil
+        }),
+    )
+
+    if err != nil {
+        log.Fatalf("Configuration error: %v", err)
+    }
+}
+```
+
+### Validators on Nested Fields
+
+Validators work with nested structs using dot notation:
+
+```go
+type Config struct {
+    Database struct {
+        Host string `key:"DB_HOST" default:"localhost"`
+        Port int    `key:"DB_PORT" default:"5432" min:"1024" max:"65535"`
+    }
+}
+
+func main() {
+    var cfg Config
+
+    err := goconfigtools.Load(&cfg,
+        goconfigtools.WithValidator("Database.Host", func(value any) error {
+            host := value.(string)
+            if host == "localhost" {
+                return fmt.Errorf("production environments must use a remote database")
+            }
+            return nil
+        }),
+    )
+}
+```
+
+### Combining Validators
+
+You can combine tag-based min/max validation with custom validators:
+
+```go
+type Config struct {
+    Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
+}
+
+func main() {
+    var cfg Config
+
+    err := goconfigtools.Load(&cfg,
+        // Additional validation: port must be a multiple of 10
+        goconfigtools.WithValidator("Port", func(value any) error {
+            port := value.(int64)
+            if port%10 != 0 {
+                return fmt.Errorf("port must be a multiple of 10")
+            }
+            return nil
+        }),
+    )
+}
+```
+
+Multiple validators are executed in order, and all must pass for the configuration to be valid.
 
 ## Running Tests
 
