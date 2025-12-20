@@ -49,6 +49,28 @@ type ValidatorFactory func(fieldType reflect.StructField, registry ValidatorRegi
 //   - time.Duration types receive time.Duration
 type Validator func(value any) error
 
+func validate(value any, key, fieldPath string, field reflect.StructField, opts *loadOptions, errors *ConfigErrors) (bool, error) {
+	// TODO: No need to register just to fetch them back again.
+
+	// Parse min/max tags and register validators
+	if err := registerValidators(field, fieldPath, opts); err != nil {
+		return false, err
+	}
+
+	// Run validators before setting the field
+	ok := true
+	if validators, exists := opts.validators[fieldPath]; exists {
+		for _, validator := range validators {
+			if err := validator(value); err != nil {
+				ok = false
+				errors.Add(key, fmt.Errorf("invalid value for %s: %w", key, err))
+			}
+		}
+	}
+
+	return ok, nil
+}
+
 // registerValidators registers any validators for the given field
 func registerValidators(fieldType reflect.StructField, fieldPath string, opts *loadOptions) error {
 	registry := func(validator Validator) {

@@ -793,8 +793,8 @@ func TestLoad_MultipleRuntimeErrors(t *testing.T) {
 	if !contains(errMsg, "required environment variable") {
 		t.Error("Error should mention required environment variable")
 	}
-	if !contains(errMsg, "invalid int value") {
-		t.Error("Error should mention invalid int value")
+	if !contains(errMsg, "ParseInt") {
+		t.Errorf("Error should mention invalid int value. Got %s", errMsg)
 	}
 	if !contains(errMsg, "exceeds maximum") {
 		t.Error("Error should mention exceeds maximum")
@@ -977,6 +977,87 @@ func TestLoad_CustomKeystore_PassesBackError(t *testing.T) {
 	}
 	if config.Value != "Value was not modified" {
 		t.Fatalf("Value was modified despite error, got %s", config.Value)
+	}
+}
+
+func TestLoad_JsonInterface_Parses(t *testing.T) {
+	type Config struct {
+		Value map[string]interface{} `key:"OPENAI_MODEL_PARAMS"`
+	}
+
+	keyStore := func(key string) (string, error) {
+		if key == "OPENAI_MODEL_PARAMS" {
+			return "{\"marker\":\"present\"}", nil
+		}
+		return "", fmt.Errorf("bad key passed %s", key)
+	}
+
+	config := Config{}
+	err := Load(&config, WithKeyStore(keyStore))
+	if err != nil {
+		t.Fatalf("Error loading custom keystore: %v", err)
+	}
+
+	if config.Value == nil {
+		t.Fatalf("Value was not loaded correctly")
+	}
+
+	if config.Value["marker"] != "present" {
+		t.Fatalf("Value was not loaded correctly")
+	}
+}
+
+func TestLoad_JsonTypes_Parses(t *testing.T) {
+	type TypedJsonStruct struct {
+		Marker string `json:"marker"`
+	}
+
+	type Config struct {
+		Value TypedJsonStruct `key:"OPENAI_MODEL_PARAMS"`
+	}
+
+	keyStore := func(key string) (string, error) {
+		if key == "OPENAI_MODEL_PARAMS" {
+			return "{\"marker\":\"present\"}", nil
+		}
+		return "", fmt.Errorf("bad key passed %s", key)
+	}
+
+	config := Config{}
+	err := Load(&config, WithKeyStore(keyStore))
+	if err != nil {
+		t.Fatalf("Error loading custom keystore: %v", err)
+	}
+
+	if config.Value.Marker != "present" {
+		t.Fatalf("Value was not loaded correctly")
+	}
+}
+
+func TestLoad_JsonPointerTypes_Parses(t *testing.T) {
+	type TypedJsonStruct struct {
+		Marker string `json:"marker"`
+	}
+
+	type Config struct {
+		Value *TypedJsonStruct `key:"OPENAI_MODEL_PARAMS"`
+	}
+
+	keyStore := func(key string) (string, error) {
+		if key == "OPENAI_MODEL_PARAMS" {
+			return "{\"marker\":\"present\"}", nil
+		}
+		return "", fmt.Errorf("bad key passed %s", key)
+	}
+
+	config := Config{}
+	err := Load(&config, WithKeyStore(keyStore))
+	if err != nil {
+		t.Fatalf("Error loading custom keystore: %v", err)
+	}
+
+	if config.Value.Marker != "present" {
+		t.Fatalf("Value was not loaded correctly")
 	}
 }
 

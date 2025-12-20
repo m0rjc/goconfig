@@ -8,6 +8,10 @@ A simple Go library for loading configuration from environment variables using s
 - Support for nested structs
 - Optional default values
 - Type conversion for common types: `string`, `bool`, `int`, `uint`, `float`, `time.Duration`
+- Ability to convert JSON strings into maps or JSON annotated structs
+- Built-in min,max,pattern validators plus support for custom validation
+- Support for custom field parsing
+- Support for a custom key-value store as an alternative to environment variables
 - Clear error messages for missing required fields or invalid values
 
 ## Installation
@@ -64,6 +68,7 @@ func main() {
 - `default`: The default value to use if the environment variable is not set (optional)
 - `min`: Minimum value for numeric types (optional)
 - `max`: Maximum value for numeric types (optional)
+- `pattern`: Regular expression for string types (optional)
 - `required`: Set to "true" to require the field to be set (optional)
 
 ## Supported Types
@@ -74,6 +79,9 @@ func main() {
 - `uint`, `uint8`, `uint16`, `uint32`, `uint64`
 - `float32`, `float64`
 - `time.Duration` (uses Go's duration format: "30s", "1m", "1h", etc.)
+- `map[string]interface{}` using JSON deserialisation
+- `struct` using JSON deserialisation
+- pointers to the above
 
 ## Examples
 
@@ -225,6 +233,42 @@ func main() {
 ```
 
 Multiple validators are executed in order, and all must pass for the configuration to be valid.
+
+### JSON Deserialisation
+
+Given `OPENAI_MODEL_PARAMS={"temperature":0.7}`
+
+```go
+type Config struct {
+	Value map[string]interface{} `key:"OPENAI_MODEL_PARAMS"`
+}
+
+config := Config{}
+err := Load(&config, WithKeyStore(keyStore))
+```
+
+This also works with typed structures
+
+```go
+type ModelParameters struct {
+	Temperature float32 `json:"temperature"`
+}
+
+type Config struct {
+	value ModelParameters `key:"OPENAI_MODEL_PARAMS"`
+}
+```
+
+It also works with pointers
+```go
+type ModelParameters struct {
+	Temperature float32 `json:"temperature"`
+}
+
+type Config struct {
+	value *ModelParameters `key:"OPENAI_MODEL_PARAMS"`
+}
+```
 
 ## Running Tests
 
