@@ -3,6 +3,7 @@ package goconfigtools
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 // mockRegistry is a mock implementation for testing that collects validators
@@ -695,5 +696,218 @@ func TestBuiltinValidatorFactory_PatternOnNonStringType(t *testing.T) {
 	expectedMsg := "pattern tag not supported for type int"
 	if err.Error() != "invalid pattern tag value \"^[0-9]+$\" for field Port: "+expectedMsg {
 		t.Errorf("Expected error %q, got %q", "invalid pattern tag value \"^[0-9]+$\" for field Port: "+expectedMsg, err.Error())
+	}
+}
+
+// TestCreateMinDurationValidator tests min validation for duration types
+func TestCreateMinDurationValidator(t *testing.T) {
+	validator, err := createMinDurationValidator("30s")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     time.Duration
+		shouldErr bool
+		errMsg    string
+	}{
+		{"above minimum", 1 * time.Minute, false, ""},
+		{"at minimum", 30 * time.Second, false, ""},
+		{"below minimum", 10 * time.Second, true, "value 10s is below minimum 30s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateMinDurationValidator_InvalidValue tests error handling for invalid min duration values
+func TestCreateMinDurationValidator_InvalidValue(t *testing.T) {
+	_, err := createMinDurationValidator("not-a-duration")
+	if err == nil {
+		t.Error("Expected error for invalid min duration value")
+	}
+}
+
+// TestCreateMaxDurationValidator tests max validation for duration types
+func TestCreateMaxDurationValidator(t *testing.T) {
+	validator, err := createMaxDurationValidator("5m")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     time.Duration
+		shouldErr bool
+		errMsg    string
+	}{
+		{"below maximum", 2 * time.Minute, false, ""},
+		{"at maximum", 5 * time.Minute, false, ""},
+		{"above maximum", 10 * time.Minute, true, "value 10m0s exceeds maximum 5m0s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateMaxDurationValidator_InvalidValue tests error handling for invalid max duration values
+func TestCreateMaxDurationValidator_InvalidValue(t *testing.T) {
+	_, err := createMaxDurationValidator("not-a-duration")
+	if err == nil {
+		t.Error("Expected error for invalid max duration value")
+	}
+}
+
+// TestBuiltinValidatorFactory_DurationMinTag tests that min tags work for time.Duration
+func TestBuiltinValidatorFactory_DurationMinTag(t *testing.T) {
+	mock, registry := newMockRegistry()
+	fieldType := reflect.StructField{
+		Name: "Timeout",
+		Type: reflect.TypeOf(time.Duration(0)),
+		Tag:  `min:"30s"`,
+	}
+
+	err := builtinValidatorFactory(fieldType, registry)
+	if err != nil {
+		t.Fatalf("Failed to register validators: %v", err)
+	}
+
+	if len(mock.validators) != 1 {
+		t.Errorf("Expected 1 validator, got %d", len(mock.validators))
+	}
+
+	// Test the validator works
+	validator := mock.validators[0]
+	if err := validator(1 * time.Minute); err != nil {
+		t.Errorf("Validator should pass for value 1m: %v", err)
+	}
+	if err := validator(10 * time.Second); err == nil {
+		t.Error("Validator should fail for value 10s")
+	}
+}
+
+// TestBuiltinValidatorFactory_DurationMaxTag tests that max tags work for time.Duration
+func TestBuiltinValidatorFactory_DurationMaxTag(t *testing.T) {
+	mock, registry := newMockRegistry()
+	fieldType := reflect.StructField{
+		Name: "Timeout",
+		Type: reflect.TypeOf(time.Duration(0)),
+		Tag:  `max:"5m"`,
+	}
+
+	err := builtinValidatorFactory(fieldType, registry)
+	if err != nil {
+		t.Fatalf("Failed to register validators: %v", err)
+	}
+
+	if len(mock.validators) != 1 {
+		t.Errorf("Expected 1 validator, got %d", len(mock.validators))
+	}
+
+	// Test the validator works
+	validator := mock.validators[0]
+	if err := validator(2 * time.Minute); err != nil {
+		t.Errorf("Validator should pass for value 2m: %v", err)
+	}
+	if err := validator(10 * time.Minute); err == nil {
+		t.Error("Validator should fail for value 10m")
+	}
+}
+
+// TestBuiltinValidatorFactory_DurationMultipleTags tests that min and max work together for durations
+func TestBuiltinValidatorFactory_DurationMultipleTags(t *testing.T) {
+	mock, registry := newMockRegistry()
+	fieldType := reflect.StructField{
+		Name: "Timeout",
+		Type: reflect.TypeOf(time.Duration(0)),
+		Tag:  `min:"30s" max:"5m"`,
+	}
+
+	err := builtinValidatorFactory(fieldType, registry)
+	if err != nil {
+		t.Fatalf("Failed to register validators: %v", err)
+	}
+
+	if len(mock.validators) != 2 {
+		t.Errorf("Expected 2 validators, got %d", len(mock.validators))
+	}
+
+	// Test both validators work
+	minValidator := mock.validators[0]
+	maxValidator := mock.validators[1]
+
+	if err := minValidator(1 * time.Minute); err != nil {
+		t.Errorf("Min validator should pass for value 1m: %v", err)
+	}
+	if err := maxValidator(1 * time.Minute); err != nil {
+		t.Errorf("Max validator should pass for value 1m: %v", err)
+	}
+
+	if err := minValidator(10 * time.Second); err == nil {
+		t.Error("Min validator should fail for value 10s")
+	}
+	if err := maxValidator(10 * time.Minute); err == nil {
+		t.Error("Max validator should fail for value 10m")
+	}
+}
+
+// TestBuiltinValidatorFactory_InvalidDurationMinTag tests error handling for invalid duration min tags
+func TestBuiltinValidatorFactory_InvalidDurationMinTag(t *testing.T) {
+	_, registry := newMockRegistry()
+	fieldType := reflect.StructField{
+		Name: "Timeout",
+		Type: reflect.TypeOf(time.Duration(0)),
+		Tag:  `min:"not-a-duration"`,
+	}
+
+	err := builtinValidatorFactory(fieldType, registry)
+	if err == nil {
+		t.Fatal("Expected error for invalid duration min tag")
+	}
+}
+
+// TestBuiltinValidatorFactory_InvalidDurationMaxTag tests error handling for invalid duration max tags
+func TestBuiltinValidatorFactory_InvalidDurationMaxTag(t *testing.T) {
+	_, registry := newMockRegistry()
+	fieldType := reflect.StructField{
+		Name: "Timeout",
+		Type: reflect.TypeOf(time.Duration(0)),
+		Tag:  `max:"not-a-duration"`,
+	}
+
+	err := builtinValidatorFactory(fieldType, registry)
+	if err == nil {
+		t.Fatal("Expected error for invalid duration max tag")
 	}
 }

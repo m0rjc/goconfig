@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+	"time"
 )
 
 // ValidatorRegistry is the callback to add a validator to the current field.
@@ -89,6 +90,31 @@ func builtinValidatorFactory(fieldType reflect.StructField, registry ValidatorRe
 	minTag := fieldType.Tag.Get("min")
 	maxTag := fieldType.Tag.Get("max")
 	patternTag := fieldType.Tag.Get("pattern")
+
+	// Check for time.Duration type before checking kind
+	// This is necessary because time.Duration is an alias for int64, but we want to
+	// parse the min/max tags as duration strings (e.g., "30s", "5m") rather than integers
+	if fieldType.Type == reflect.TypeOf(time.Duration(0)) {
+		// Register min validator for duration
+		if minTag != "" {
+			validator, err := createMinDurationValidator(minTag)
+			if err != nil {
+				return fmt.Errorf("invalid min tag value %q for field %s: %w", minTag, fieldType.Name, err)
+			}
+			registry(validator)
+		}
+
+		// Register max validator for duration
+		if maxTag != "" {
+			validator, err := createMaxDurationValidator(maxTag)
+			if err != nil {
+				return fmt.Errorf("invalid max tag value %q for field %s: %w", maxTag, fieldType.Name, err)
+			}
+			registry(validator)
+		}
+
+		return nil
+	}
 
 	kind := fieldType.Type.Kind()
 
@@ -216,7 +242,37 @@ func createMaxValidator(kind reflect.Kind, maxStr string) (Validator, error) {
 	}
 }
 
-// createMaxValidator creates a maximum value validator for the given type.
+// createMinDurationValidator creates a minimum duration validator.
+func createMinDurationValidator(minStr string) (Validator, error) {
+	min, err := time.ParseDuration(minStr)
+	if err != nil {
+		return nil, err
+	}
+	return func(value any) error {
+		v := value.(time.Duration)
+		if v < min {
+			return fmt.Errorf("value %s is below minimum %s", v, min)
+		}
+		return nil
+	}, nil
+}
+
+// createMaxDurationValidator creates a maximum duration validator.
+func createMaxDurationValidator(maxStr string) (Validator, error) {
+	max, err := time.ParseDuration(maxStr)
+	if err != nil {
+		return nil, err
+	}
+	return func(value any) error {
+		v := value.(time.Duration)
+		if v > max {
+			return fmt.Errorf("value %s exceeds maximum %s", v, max)
+		}
+		return nil
+	}, nil
+}
+
+// createPatternValidator creates a pattern validator for strings.
 func createPatternValidator(kind reflect.Kind, patternStr string) (Validator, error) {
 	switch kind {
 	case reflect.String:
