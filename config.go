@@ -2,7 +2,6 @@ package goconfigtools
 
 import (
 	"fmt"
-	"os"
 	"reflect"
 	"strconv"
 	"time"
@@ -13,6 +12,8 @@ type Option func(*loadOptions)
 
 // loadOptions holds the configuration options for Load.
 type loadOptions struct {
+	// keyStore reads the values. Default to os.GetEnv()
+	keyStore KeyStore
 	// validatorFactories provide validators for a field
 	validatorFactories []ValidatorFactory
 	// validators maps field paths to their validator functions
@@ -87,9 +88,18 @@ func WithValidator(path string, validator Validator) Option {
 	}
 }
 
+// WithKeyStore replaces the environment variable keystore with an alternative.
+// Use this to read from other sources such as a database or properties file.
+func WithKeyStore(keyStore KeyStore) Option {
+	return func(opts *loadOptions) {
+		opts.keyStore = keyStore
+	}
+}
+
 // newLoadOptions creates default load options.
 func newLoadOptions() *loadOptions {
 	return &loadOptions{
+		keyStore:           EnvironmentKeyStore,
 		validatorFactories: []ValidatorFactory{builtinValidatorFactory},
 		validators:         make(map[string][]Validator),
 	}
@@ -208,7 +218,11 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *Co
 		required := fieldType.Tag.Get("required") == "true"
 
 		// Get the environment variable value
-		envValue := os.Getenv(key)
+		envValue, err := opts.keyStore(key)
+		if err != nil {
+			// Consider a store error to be fatal
+			return err
+		}
 
 		// Determine which value to use
 		value := envValue

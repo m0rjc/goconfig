@@ -1,6 +1,7 @@
 package goconfigtools
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -929,7 +930,58 @@ func TestLoad_MultipleValidationErrors(t *testing.T) {
 	}
 }
 
+func TestLoad_CustomKeystore_ReadsFromStore(t *testing.T) {
+	type Config struct {
+		Value string `key:"custom_key" required:"true"`
+	}
+
+	keyStore := func(key string) (string, error) {
+		return key + ":OK", nil
+	}
+
+	config := Config{
+		Value: "Value was not modified",
+	}
+
+	err := Load(&config, WithKeyStore(keyStore))
+	if err != nil {
+		t.Fatalf("Error loading custom keystore: %v", err)
+	}
+
+	if config.Value != "custom_key:OK" {
+		t.Fatalf("Error loading custom keystore: expected custom_key:OK, got %s", config.Value)
+	}
+}
+
+func TestLoad_CustomKeystore_PassesBackError(t *testing.T) {
+	type Config struct {
+		Value string `key:"custom_key" required:"true"`
+	}
+
+	expectedError := errors.New("custom_key:error")
+
+	keyStore := func(key string) (string, error) {
+		return "", expectedError
+	}
+
+	config := Config{
+		Value: "Value was not modified",
+	}
+
+	err := Load(&config, WithKeyStore(keyStore))
+	if err == nil {
+		t.Fatalf("No error was returned when loading the custom store")
+	}
+	if !errors.Is(err, expectedError) {
+		t.Fatalf("Incorrect error loading custom keystore: %v", err)
+	}
+	if config.Value != "Value was not modified" {
+		t.Fatalf("Value was modified despite error, got %s", config.Value)
+	}
+}
+
 // Helper function for string contains check
+// TODO: Use Go's standard function instead of this.
 func contains(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		if s[i:i+len(substr)] == substr {
