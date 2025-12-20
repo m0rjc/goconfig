@@ -1,18 +1,16 @@
 # goconfigtools
 
-A simple Go library for loading configuration from environment variables using struct tags.
+A simple, type-safe Go library for loading configuration from environment variables using struct tags.
 
 ## Features
 
-- Load configuration from environment variables using struct tags
-- Support for nested structs
-- Optional default values
-- Type conversion for common types: `string`, `bool`, `int`, `uint`, `float`, `time.Duration`
-- Ability to convert JSON strings into maps or JSON annotated structs
-- Built-in min,max,pattern validators plus support for custom validation
-- Support for custom field parsing
-- Support for a custom key-value store as an alternative to environment variables
-- Clear error messages for missing required fields or invalid values
+- 🏷️ **Struct-based configuration** - Define config with Go structs and tags
+- ✅ **Built-in validation** - `min`, `max`, and `pattern` tags plus custom validators ([docs](docs/validation.md) | [example](example/validation))
+- 🎯 **Type-safe** - Automatic conversion for primitives, durations, and JSON
+- 🔄 **Flexible defaults** - Struct tags or pre-initialized values ([docs](docs/defaulting.md))
+- 🌳 **Nested structs** - Organize configuration hierarchically
+- 🔧 **Extensible** - Custom parsers and key stores ([docs](docs/advanced.md))
+- 💬 **Clear errors** - Descriptive validation and missing field errors
 
 ## Installation
 
@@ -20,14 +18,13 @@ A simple Go library for loading configuration from environment variables using s
 go get github.com/m0rjc/goconfigtools
 ```
 
-## Usage
-
-Define your configuration struct with `key` and optional `default` tags:
+## Quick Start
 
 ```go
 package main
 
 import (
+    "context"
     "fmt"
     "log"
     "time"
@@ -35,277 +32,192 @@ import (
     "github.com/m0rjc/goconfigtools"
 )
 
-type WebhookConfig struct {
-    Path    string        `key:"WEBHOOK_PATH" default:"webhook"`
-    Timeout time.Duration `key:"WEBHOOK_TIMEOUT"` // No default - required
-}
-
-type AIConfig struct {
-    APIKey string `key:"OPENAI_API_KEY"`     // Required
-    Model  string `key:"OPENAI_MODEL" default:"gpt-4"` // Optional with default
-}
-
 type Config struct {
-    AI       AIConfig
-    WebHook  WebhookConfig
-    EnableAI bool `key:"ENABLE_AI" default:"false"`
+    // Basic fields
+    APIKey string `key:"API_KEY" required:"true"`
+    Host   string `key:"HOST" default:"localhost"`
+
+    // With validation
+    Port    int           `key:"PORT" default:"8080" min:"1024" max:"65535"`
+    Timeout time.Duration `key:"TIMEOUT" default:"30s" min:"1s" max:"5m"`
+
+    // Nested configuration
+    Database struct {
+        Host     string `key:"DB_HOST" default:"localhost"`
+        Port     int    `key:"DB_PORT" default:"5432"`
+        Username string `key:"DB_USER" required:"true"`
+        Password string `key:"DB_PASSWORD" required:"true"`
+    }
 }
 
 func main() {
     var config Config
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfigtools.Load(context.Background(), &config); err != nil {
         log.Fatalf("Failed to load configuration: %v", err)
     }
 
-    fmt.Printf("Configuration loaded: %+v\n", config)
+    fmt.Printf("Server: %s:%d\n", config.Host, config.Port)
+    fmt.Printf("Database: %s:%d\n", config.Database.Host, config.Database.Port)
 }
+```
+
+Set environment variables and run:
+
+```bash
+export API_KEY="sk-your-api-key"
+export DB_USER="appuser"
+export DB_PASSWORD="secret"
+export PORT="8080"
+go run main.go
 ```
 
 ## Struct Tags
 
-- `key`: The environment variable name to read from (required)
-- `default`: The default value to use if the environment variable is not set (optional)
-- `min`: Minimum value for numeric types (optional)
-- `max`: Maximum value for numeric types (optional)
-- `pattern`: Regular expression for string types (optional)
-- `required`: Set to "true" to require the field to not be empty (optional)
-- `keyRequired`: Set to "true" to require the field to present, though it can be explicitly blank
+| Tag | Purpose | Example |
+|-----|---------|---------|
+| `key` | Environment variable name (required) | `key:"PORT"` |
+| `default` | Default value if not set | `default:"8080"` |
+| `min` | Minimum value (numbers, durations) | `min:"1024"` |
+| `max` | Maximum value (numbers, durations) | `max:"65535"` |
+| `pattern` | Regex pattern for strings | `pattern:"^[a-z]+$"` |
+| `required` | Must be present and non-empty | `required:"true"` |
+| `keyRequired` | Must be present (can be empty) | `keyRequired:"true"` |
 
 ## Supported Types
 
-- `string`
-- `bool`
-- `int`, `int8`, `int16`, `int32`, `int64`
-- `uint`, `uint8`, `uint16`, `uint32`, `uint64`
-- `float32`, `float64`
-- `time.Duration` (uses Go's duration format: "30s", "1m", "1h", etc.)
-- `map[string]interface{}` using JSON deserialisation
-- `struct` using JSON deserialisation
-- pointers to the above
-
-## Examples
-
-### Setting environment variables
-
-```bash
-export OPENAI_API_KEY="sk-..."
-export WEBHOOK_TIMEOUT="30s"
-export ENABLE_AI="true"
-go run example/main.go
-```
-
-### Using defaults
-
-If you don't set optional variables, defaults will be used:
-
-```bash
-export OPENAI_API_KEY="sk-..."
-export WEBHOOK_TIMEOUT="30s"
-# WEBHOOK_PATH will default to "webhook"
-# OPENAI_MODEL will default to "gpt-4"
-# ENABLE_AI will default to "false"
-go run example/main.go
-```
-
-
-### Defaulting behaviour and required fields
-
-* The `required="true"` tag checks that the key is both present and has a non-blank value.
-* The `keyRequired="true"` tag requires the key to be present, but it may have a blank value.
-* Failing the above errors, the value is set on the struct if the key is found in configuration
-* If the key is absent then the value is not modified. This allows a struct to be passed with initialised defaults.
-
-When using environment variables (default Key Store)
-
-| Environment      | No Required Tags         | keyRequired="true"     | required="true"     |
-|------------------|--------------------------|------------------------|---------------------|
-| `export FOO=bar` | Value becomes "bar"      | Value becomes "bar"    | Value becomes "bar" |
-| `export FOO=`    | Value becomes ""         | Value becomes ""       | _Error_             |
-| `unset FOO`      | Value remains unchanged  | _Error_                | _Error_             |
-
-**Important notes about `default` tags:**
-
-* When a key is **unset**, the `default` value is used. This satisfies both `keyRequired="true"` and `required="true"`.
-* When a key is **set to empty** (e.g., `export FOO=`), it overrides the default and the empty value is used. This will cause an error if `required="true"`.
-* Defaults are only applied when the key is completely absent from the key store.
-
-The sentinel errors are ErrMissingConfigKey and ErrMissingValue.
+- **Primitives:** `string`, `bool`
+- **Integers:** `int`, `int8`, `int16`, `int32`, `int64`, `uint`, `uint8`, `uint16`, `uint32`, `uint64`
+- **Floats:** `float32`, `float64`
+- **Duration:** `time.Duration` - uses Go format: "30s", "5m", "1h"
+- **JSON:** `map[string]interface{}` or structs with `json` tags
+- **Pointers:** All above types as pointers
+- **Nested structs:** Organize configuration hierarchically
 
 ## Validation
 
-### Min/Max Range Validation
-
-Use `min` and `max` struct tags to enforce numeric ranges:
+### Built-in Validators
 
 ```go
 type ServerConfig struct {
-    Port       int     `key:"PORT" default:"8080" min:"1024" max:"65535"`
-    MaxConns   int     `key:"MAX_CONNS" default:"100" min:"1" max:"10000"`
-    LoadFactor float64 `key:"LOAD_FACTOR" default:"0.75" min:"0.0" max:"1.0"`
-}
-
-func main() {
-    var cfg ServerConfig
-    if err := goconfigtools.Load(&cfg); err != nil {
-        log.Fatalf("Configuration error: %v", err)
-    }
-    // Port is guaranteed to be between 1024 and 65535
+    Port       int           `key:"PORT" default:"8080" min:"1024" max:"65535"`
+    MaxConns   int           `key:"MAX_CONNS" default:"100" min:"1" max:"10000"`
+    LoadFactor float64       `key:"LOAD_FACTOR" default:"0.75" min:"0.0" max:"1.0"`
+    Timeout    time.Duration `key:"TIMEOUT" default:"30s" min:"1s" max:"5m"`
+    Username   string        `key:"USERNAME" pattern:"^[a-zA-Z0-9_]+$"`
 }
 ```
 
-If a value is outside the specified range, you'll get a clear error message:
+Validation errors provide clear messages:
 ```
 invalid value for PORT: value 500 is below minimum 1024
 ```
 
-### Pattern Validation
-
-Use `pattern` to specify a regular expression to test string values.
-
 ### Custom Validators
 
-Use the `WithValidator` option to add custom validation logic:
+```go
+err := goconfigtools.Load(context.Background(), &cfg,
+    goconfigtools.WithValidator("APIKey", func(value any) error {
+        key := value.(string)
+        if !strings.HasPrefix(key, "sk-") {
+            return fmt.Errorf("API key must start with 'sk-'")
+        }
+        return nil
+    }),
+)
+```
+
+📚 **[Full Validation Guide](docs/validation.md)** | **[Validation Example](example/validation)**
+
+## JSON Configuration
+
+Load complex JSON structures from environment variables:
 
 ```go
-type Config struct {
-    APIKey string `key:"API_KEY" required:"true"`
-    Host   string `key:"HOST" default:"localhost"`
+type ModelParams struct {
+    Temperature float64 `json:"temperature"`
+    MaxTokens   int     `json:"max_tokens"`
 }
 
-func main() {
-    var cfg Config
+type Config struct {
+    Params ModelParams `key:"MODEL_PARAMS"`
+}
+```
 
-    err := goconfigtools.Load(&cfg,
-        // Validate API key format
-        goconfigtools.WithValidator("APIKey", func(value any) error {
-            key := value.(string)
-            if !strings.HasPrefix(key, "sk-") {
-                return fmt.Errorf("API key must start with 'sk-'")
-            }
-            if len(key) < 20 {
-                return fmt.Errorf("API key too short")
-            }
-            return nil
-        }),
+```bash
+export MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
+```
 
-        // Validate host is not an IP address
-        goconfigtools.WithValidator("Host", func(value any) error {
-            host := value.(string)
-            if net.ParseIP(host) != nil {
-                return fmt.Errorf("host must be a hostname, not an IP address")
-            }
-            return nil
-        }),
-    )
+📚 **[JSON Guide](docs/json.md)**
 
-    if err != nil {
-        log.Fatalf("Configuration error: %v", err)
+## Documentation
+
+- 📖 **[Documentation Index](docs/)** - Complete guides and reference
+- 📋 **[Validation](docs/validation.md)** - Min/max, pattern, and custom validators
+- ⚙️ **[Defaulting & Required Fields](docs/defaulting.md)** - How defaults and required work
+- 🔄 **[JSON Deserialization](docs/json.md)** - Working with JSON config
+- 🔧 **[Advanced Features](docs/advanced.md)** - Custom parsers and key stores
+- 💡 **[Examples](example/)** - Working code examples
+
+## Examples
+
+- **[Simple Example](example/simple)** - Basic usage with defaults and nested structs
+- **[Validation Example](example/validation)** - Comprehensive validation demonstration
+
+## Advanced Usage
+
+### Custom Key Stores
+
+Read from sources other than environment variables:
+
+```go
+// Composite store: try environment, then fall back to file
+store := goconfigtools.CompositeStore(
+    goconfigtools.EnvironmentKeyStore,
+    fileKeyStore("/etc/myapp/config"),
+)
+
+err := goconfigtools.Load(context.Background(), &cfg,
+    goconfigtools.WithKeyStore(store),
+)
+```
+
+Supports AWS Secrets Manager, HashiCorp Vault, config files, and more.
+
+📚 **[Advanced Guide](docs/advanced.md)**
+
+## Error Handling
+
+```go
+err := goconfigtools.Load(context.Background(), &config)
+if err != nil {
+    // Check for specific errors
+    if errors.Is(err, goconfigtools.ErrMissingConfigKey) {
+        log.Fatal("Missing required environment variable")
     }
+
+    log.Fatalf("Configuration error: %v", err)
 }
 ```
 
-### Validators on Nested Fields
+Multiple errors are collected and reported together for easier debugging.
 
-Validators work with nested structs using dot notation:
-
-```go
-type Config struct {
-    Database struct {
-        Host string `key:"DB_HOST" default:"localhost"`
-        Port int    `key:"DB_PORT" default:"5432" min:"1024" max:"65535"`
-    }
-}
-
-func main() {
-    var cfg Config
-
-    err := goconfigtools.Load(&cfg,
-        goconfigtools.WithValidator("Database.Host", func(value any) error {
-            host := value.(string)
-            if host == "localhost" {
-                return fmt.Errorf("production environments must use a remote database")
-            }
-            return nil
-        }),
-    )
-}
-```
-
-### Combining Validators
-
-You can combine tag-based min/max validation with custom validators:
-
-```go
-type Config struct {
-    Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
-}
-
-func main() {
-    var cfg Config
-
-    err := goconfigtools.Load(&cfg,
-        // Additional validation: port must be a multiple of 10
-        goconfigtools.WithValidator("Port", func(value any) error {
-            port := value.(int64)
-            if port%10 != 0 {
-                return fmt.Errorf("port must be a multiple of 10")
-            }
-            return nil
-        }),
-    )
-}
-```
-
-Multiple validators are executed in order, and all must pass for the configuration to be valid.
-
-### JSON Deserialisation
-
-Given `OPENAI_MODEL_PARAMS={"temperature":0.7}`
-
-```go
-type Config struct {
-	Value map[string]interface{} `key:"OPENAI_MODEL_PARAMS"`
-}
-
-config := Config{}
-err := Load(&config, WithKeyStore(keyStore))
-```
-
-This also works with typed structures
-
-```go
-type ModelParameters struct {
-	Temperature float32 `json:"temperature"`
-}
-
-type Config struct {
-	Value ModelParameters `key:"OPENAI_MODEL_PARAMS"`
-}
-```
-
-It also works with pointers
-```go
-type ModelParameters struct {
-	Temperature float32 `json:"temperature"`
-}
-
-type Config struct {
-	Value *ModelParameters `key:"OPENAI_MODEL_PARAMS"`
-}
-```
-
-### Error Handling
-
-See the LogError function in `errors.go` for an example of logging errors from the Load function to a
-structured log.
-
-## Running Tests
+## Testing
 
 ```bash
 go test -v
 ```
 
+## Contributing
+
+Contributions welcome! Please open an issue or pull request on [GitHub](https://github.com/m0rjc/goconfigtools).
+
 ## License
 
-MIT
+MIT License - see [LICENSE](LICENSE) file for details.
+
+## Links
+
+- 📚 [Documentation](docs/)
+- 🐙 [GitHub Repository](https://github.com/m0rjc/goconfigtools)
+- 📦 [pkg.go.dev](https://pkg.go.dev/github.com/m0rjc/goconfigtools)

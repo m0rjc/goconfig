@@ -18,9 +18,10 @@
 // Define your configuration struct with 'key' and optional 'default' tags:
 //
 //	type Config struct {
-//	    APIKey string `key:"API_KEY"`                           // Required
-//	    Model  string `key:"MODEL" default:"gpt-4"`             // Optional with default
-//	    Port   int    `key:"PORT" default:"8080" min:"1024"`    // With validation
+//	    APIKey  string        `key:"API_KEY"`                                      // Required
+//	    Model   string        `key:"MODEL" default:"gpt-4"`                        // Optional with default
+//	    Port    int           `key:"PORT" default:"8080" min:"1024" max:"65535"`  // With min/max validation
+//	    Timeout time.Duration `key:"TIMEOUT" default:"30s" min:"1s" max:"5m"`     // Duration with validation
 //	}
 //
 //	func main() {
@@ -28,6 +29,8 @@
 //	    if err := goconfigtools.Load(context.Background(), &config); err != nil {
 //	        log.Fatalf("Failed to load configuration: %v", err)
 //	    }
+//	    // Port is guaranteed to be between 1024 and 65535
+//	    // Timeout is guaranteed to be between 1s and 5m
 //	}
 //
 // # Struct Tags
@@ -121,4 +124,15 @@
 //	}
 //
 // Error logging to structured logs is supported.
+//
+// # Documentation
+//
+// For detailed guides and examples, see:
+//
+//   - https://github.com/m0rjc/goconfigtools/tree/main/docs - Full documentation
+//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/validation.md - Validation guide
+//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/defaulting.md - Defaulting behavior
+//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/json.md - JSON deserialization
+//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/advanced.md - Advanced features
+//   - https://github.com/m0rjc/goconfigtools/tree/main/example - Working examples
 package goconfigtools
