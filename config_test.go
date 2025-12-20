@@ -634,6 +634,80 @@ func TestLoad_BuiltinValidators_UnsupportedTypes(t *testing.T) {
 	}
 }
 
+// TestLoad_BuiltinValidators_Duration tests that min/max tags work with time.Duration
+func TestLoad_BuiltinValidators_Duration(t *testing.T) {
+	type TimeoutConfig struct {
+		Timeout time.Duration `key:"TIMEOUT" default:"1m" min:"30s" max:"5m"`
+	}
+
+	// Test valid value
+	os.Clearenv()
+	os.Setenv("TIMEOUT", "2m")
+
+	var cfg TimeoutConfig
+	err := Load(context.Background(), &cfg)
+	if err != nil {
+		t.Fatalf("Expected no error for valid value, got %v", err)
+	}
+	if cfg.Timeout != 2*time.Minute {
+		t.Errorf("Expected Timeout to be 2m, got %v", cfg.Timeout)
+	}
+
+	// Test below minimum
+	os.Clearenv()
+	os.Setenv("TIMEOUT", "10s")
+	var cfg2 TimeoutConfig
+	err = Load(context.Background(), &cfg2)
+	if err == nil {
+		t.Fatal("Expected error for value below minimum")
+	}
+	var configErrors *ConfigErrors
+	if !errors.As(err, &configErrors) {
+		t.Fatalf("Expected ConfigErrors, got %v", err)
+	}
+
+	// Test above maximum
+	os.Clearenv()
+	os.Setenv("TIMEOUT", "10m")
+	var cfg3 TimeoutConfig
+	err = Load(context.Background(), &cfg3)
+	if err == nil {
+		t.Fatal("Expected error for value above maximum")
+	}
+	if !errors.As(err, &configErrors) {
+		t.Fatalf("Expected ConfigErrors, got %v", err)
+	}
+
+	// Test default value is validated
+	os.Clearenv()
+	var cfg4 TimeoutConfig
+	err = Load(context.Background(), &cfg4)
+	if err != nil {
+		t.Fatalf("Expected no error for valid default value, got %v", err)
+	}
+	if cfg4.Timeout != 1*time.Minute {
+		t.Errorf("Expected Timeout to be 1m, got %v", cfg4.Timeout)
+	}
+
+	// Test at minimum boundary
+	os.Clearenv()
+	os.Setenv("TIMEOUT", "30s")
+	var cfg5 TimeoutConfig
+	err = Load(context.Background(), &cfg5)
+	if err != nil {
+		t.Fatalf("Expected no error for value at minimum, got %v", err)
+	}
+
+	// Test at maximum boundary
+	os.Clearenv()
+	os.Setenv("TIMEOUT", "5m")
+	var cfg6 TimeoutConfig
+	err = Load(context.Background(), &cfg6)
+	if err != nil {
+		t.Fatalf("Expected no error for value at maximum, got %v", err)
+	}
+}
+
 func TestLoad_WithValidatorFactory(t *testing.T) {
 	type EmailConfig struct {
 		Email    string `key:"EMAIL" email:"true"`
