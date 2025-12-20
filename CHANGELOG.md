@@ -1,5 +1,10 @@
 # Changelog
 
+## [v0.2.0] - 2025-12-19
+
+### Added
+- Custom validation mechanism
+
 ## [v0.1.0] - 2025-12-19
 
 ### Added

@@ -1,7 +1,9 @@
 package goconfigtools
 
 import (
+	"fmt"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -269,4 +271,492 @@ func TestLoad_FloatTypes(t *testing.T) {
 	if cfg.Threshold != 0.5 {
 		t.Errorf("Expected Threshold to be 0.5, got %f", cfg.Threshold)
 	}
+}
+
+func TestLoad_BackwardCompatibility(t *testing.T) {
+	// Ensure that existing Load(&config) calls work without options
+	os.Clearenv()
+	os.Setenv("OPENAI_API_KEY", "test-key")
+	os.Setenv("WEBHOOK_TIMEOUT", "30s")
+
+	var cfg Config
+	if err := Load(&cfg); err != nil {
+		t.Fatalf("Load without options failed: %v", err)
+	}
+
+	if cfg.AI.APIKey != "test-key" {
+		t.Errorf("Expected APIKey to be 'test-key', got %q", cfg.AI.APIKey)
+	}
+}
+
+// Validation Framework Tests
+// These tests verify that the validation framework is integrated correctly,
+// using mock validators to avoid testing specific validation logic (which is in validation_test.go)
+
+func TestLoad_WithValidator_RootField(t *testing.T) {
+	type SimpleConfig struct {
+		Port int `key:"PORT" default:"8080"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		validator Validator
+		shouldErr bool
+		errMsg    string
+	}{
+		{
+			name:  "passing validator",
+			value: "8080",
+			validator: func(value any) error {
+				port := value.(int64)
+				if port%10 != 0 {
+					return fmt.Errorf("port must be multiple of 10")
+				}
+				return nil
+			},
+			shouldErr: false,
+		},
+		{
+			name:  "failing validator",
+			value: "8081",
+			validator: func(value any) error {
+				port := value.(int64)
+				if port%10 != 0 {
+					return fmt.Errorf("port must be multiple of 10")
+				}
+				return nil
+			},
+			shouldErr: true,
+			errMsg:    "port must be multiple of 10",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("PORT", tt.value)
+
+			var cfg SimpleConfig
+			err := Load(&cfg, WithValidator("Port", tt.validator))
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for PORT: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for PORT: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_WithValidator_NestedField(t *testing.T) {
+	type NestedConfig struct {
+		Database struct {
+			Host string `key:"DB_HOST" default:"localhost"`
+		}
+	}
+
+	os.Clearenv()
+	os.Setenv("DB_HOST", "192.168.1.1")
+
+	var cfg NestedConfig
+	err := Load(&cfg, WithValidator("Database.Host", func(value any) error {
+		host := value.(string)
+		if host == "192.168.1.1" {
+			return fmt.Errorf("IP addresses not allowed")
+		}
+		return nil
+	}))
+
+	if err == nil {
+		t.Fatal("Expected error for IP address")
+	}
+
+	if err.Error() != "invalid value for DB_HOST: IP addresses not allowed" {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+func TestLoad_WithValidator_MultipleValidators(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg PortConfig
+	err := Load(&cfg,
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port < 1024 {
+				return fmt.Errorf("port below 1024")
+			}
+			return nil
+		}),
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port%10 != 0 {
+				return fmt.Errorf("port must be multiple of 10")
+			}
+			return nil
+		}),
+	)
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Test that first validator fails
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	var cfg2 PortConfig
+	err = Load(&cfg2,
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port < 1024 {
+				return fmt.Errorf("port below 1024")
+			}
+			return nil
+		}),
+		WithValidator("Port", func(value any) error {
+			port := value.(int64)
+			if port%10 != 0 {
+				return fmt.Errorf("port must be multiple of 10")
+			}
+			return nil
+		}),
+	)
+
+	if err == nil || err.Error() != "invalid value for PORT: port below 1024" {
+		t.Errorf("Expected first validator to fail, got %v", err)
+	}
+}
+
+// Integration test: Verify builtin validators (min/max/pattern) work at different field positions
+func TestLoad_BuiltinValidators_RootField(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
+	}
+
+	// Test valid value
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg PortConfig
+	err := Load(&cfg)
+	if err != nil {
+		t.Fatalf("Expected no error for valid value, got %v", err)
+	}
+
+	// Test below minimum
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	var cfg2 PortConfig
+	err = Load(&cfg2)
+	if err == nil {
+		t.Fatal("Expected error for value below minimum")
+	}
+	if err.Error() != "invalid value for PORT: value 500 is below minimum 1024" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Test above maximum
+	os.Clearenv()
+	os.Setenv("PORT", "70000")
+	var cfg3 PortConfig
+	err = Load(&cfg3)
+	if err == nil {
+		t.Fatal("Expected error for value above maximum")
+	}
+	if err.Error() != "invalid value for PORT: value 70000 exceeds maximum 65535" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestLoad_BuiltinValidators_NestedField(t *testing.T) {
+	type DatabaseConfig struct {
+		ConnectionString string `key:"DB_CONN" pattern:"^[a-zA-Z]+://.*$"`
+	}
+
+	type AppConfig struct {
+		Database DatabaseConfig
+	}
+
+	// Test valid value
+	os.Clearenv()
+	os.Setenv("DB_CONN", "postgresql://localhost:5432/db")
+
+	var cfg AppConfig
+	err := Load(&cfg)
+	if err != nil {
+		t.Fatalf("Expected no error for valid value, got %v", err)
+	}
+
+	if cfg.Database.ConnectionString != "postgresql://localhost:5432/db" {
+		t.Errorf("Expected ConnectionString to be set correctly, got %q", cfg.Database.ConnectionString)
+	}
+
+	// Test invalid value
+	os.Clearenv()
+	os.Setenv("DB_CONN", "localhost:5432/db")
+	var cfg2 AppConfig
+	err = Load(&cfg2)
+	if err == nil {
+		t.Fatal("Expected error for invalid pattern")
+	}
+}
+
+func TestLoad_BuiltinValidators_WithDefaultValue(t *testing.T) {
+	type ConfigWithDefault struct {
+		APIKey string `key:"API_KEY" default:"test_key_123" pattern:"^[a-z_0-9]+$"`
+	}
+
+	// Test that default value is validated
+	os.Clearenv()
+
+	var cfg ConfigWithDefault
+	err := Load(&cfg)
+	if err != nil {
+		t.Fatalf("Expected no error for valid default value, got %v", err)
+	}
+
+	if cfg.APIKey != "test_key_123" {
+		t.Errorf("Expected APIKey to be 'test_key_123', got %q", cfg.APIKey)
+	}
+
+	// Test that env value is validated
+	os.Clearenv()
+	os.Setenv("API_KEY", "INVALID-KEY")
+	var cfg2 ConfigWithDefault
+	err = Load(&cfg2)
+	if err == nil {
+		t.Fatal("Expected error for invalid env value")
+	}
+}
+
+func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
+	type PortConfig struct {
+		Port int `key:"PORT" default:"8080" min:"1024" max:"65535"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8085")
+
+	var cfg PortConfig
+	err := Load(&cfg, WithValidator("Port", func(value any) error {
+		port := value.(int64)
+		if port%10 != 0 {
+			return fmt.Errorf("port must be multiple of 10")
+		}
+		return nil
+	}))
+
+	// Should fail custom validator (not multiple of 10)
+	if err == nil {
+		t.Fatal("Expected error for non-multiple of 10")
+	}
+	if err.Error() != "invalid value for PORT: port must be multiple of 10" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+
+	// Test min validation still works
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	var cfg2 PortConfig
+	err = Load(&cfg2)
+	if err == nil || err.Error() != "invalid value for PORT: value 500 is below minimum 1024" {
+		t.Errorf("Expected min validation to fail, got %v", err)
+	}
+}
+
+func TestLoad_BuiltinValidators_InvalidTags(t *testing.T) {
+	type BadMinConfig struct {
+		Port int `key:"PORT" default:"8080" min:"not-a-number"`
+	}
+
+	os.Clearenv()
+
+	var cfg BadMinConfig
+	err := Load(&cfg)
+	if err == nil {
+		t.Fatal("Expected error for invalid min tag")
+	}
+
+	type BadMaxConfig struct {
+		Port int `key:"PORT" default:"8080" max:"not-a-number"`
+	}
+
+	var cfg2 BadMaxConfig
+	err = Load(&cfg2)
+	if err == nil {
+		t.Fatal("Expected error for invalid max tag")
+	}
+
+	type BadPatternConfig struct {
+		Field string `key:"FIELD" pattern:"[invalid(regex"`
+	}
+
+	os.Setenv("FIELD", "value")
+	var cfg3 BadPatternConfig
+	err = Load(&cfg3)
+	if err == nil {
+		t.Fatal("Expected error for invalid regex pattern")
+	}
+}
+
+func TestLoad_BuiltinValidators_UnsupportedTypes(t *testing.T) {
+	type InvalidConfig struct {
+		Port int `key:"PORT" pattern:"^[0-9]+$"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg InvalidConfig
+	err := Load(&cfg)
+	if err == nil {
+		t.Fatal("Expected error for pattern tag on non-string type")
+	}
+
+	expectedMsg := "pattern tag not supported for type int"
+	if err.Error() != "invalid pattern tag value \"^[0-9]+$\" for field Port: "+expectedMsg {
+		t.Errorf("Expected error %q, got %q", "invalid pattern tag value \"^[0-9]+$\" for field Port: "+expectedMsg, err.Error())
+	}
+}
+
+func TestLoad_WithValidatorFactory(t *testing.T) {
+	type EmailConfig struct {
+		Email    string `key:"EMAIL" email:"true"`
+		Username string `key:"USERNAME"`
+	}
+
+	// Custom factory that validates email fields based on a custom tag
+	emailFactory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
+		if fieldType.Tag.Get("email") == "true" {
+			registry(func(value any) error {
+				email := value.(string)
+				if email == "" || !contains(email, "@") {
+					return fmt.Errorf("invalid email format")
+				}
+				return nil
+			})
+		}
+		return nil
+	}
+
+	// Test valid email
+	os.Clearenv()
+	os.Setenv("EMAIL", "user@example.com")
+	os.Setenv("USERNAME", "testuser")
+
+	var cfg EmailConfig
+	err := Load(&cfg, WithValidatorFactory(emailFactory))
+	if err != nil {
+		t.Fatalf("Expected no error for valid email, got %v", err)
+	}
+
+	if cfg.Email != "user@example.com" {
+		t.Errorf("Expected Email to be 'user@example.com', got %q", cfg.Email)
+	}
+
+	// Test invalid email
+	os.Clearenv()
+	os.Setenv("EMAIL", "invalid-email")
+	os.Setenv("USERNAME", "testuser")
+
+	var cfg2 EmailConfig
+	err = Load(&cfg2, WithValidatorFactory(emailFactory))
+	if err == nil {
+		t.Fatal("Expected error for invalid email")
+	}
+
+	if err.Error() != "invalid value for EMAIL: invalid email format" {
+		t.Errorf("Unexpected error: %v", err)
+	}
+}
+
+func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
+	type Config struct {
+		Email    string `key:"EMAIL" email:"true"`
+		Username string `key:"USERNAME" alphanum:"true"`
+	}
+
+	emailFactory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
+		if fieldType.Tag.Get("email") == "true" {
+			registry(func(value any) error {
+				email := value.(string)
+				if !contains(email, "@") {
+					return fmt.Errorf("must contain @")
+				}
+				return nil
+			})
+		}
+		return nil
+	}
+
+	alphanumFactory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
+		if fieldType.Tag.Get("alphanum") == "true" {
+			registry(func(value any) error {
+				username := value.(string)
+				for _, c := range username {
+					if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+						return fmt.Errorf("must be alphanumeric")
+					}
+				}
+				return nil
+			})
+		}
+		return nil
+	}
+
+	// Test both validators pass
+	os.Clearenv()
+	os.Setenv("EMAIL", "user@example.com")
+	os.Setenv("USERNAME", "user123")
+
+	var cfg Config
+	err := Load(&cfg, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	// Test email validator fails
+	os.Clearenv()
+	os.Setenv("EMAIL", "invalid")
+	os.Setenv("USERNAME", "user123")
+
+	var cfg2 Config
+	err = Load(&cfg2, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	if err == nil {
+		t.Fatal("Expected error for invalid email")
+	}
+
+	// Test username validator fails
+	os.Clearenv()
+	os.Setenv("EMAIL", "user@example.com")
+	os.Setenv("USERNAME", "user-123")
+
+	var cfg3 Config
+	err = Load(&cfg3, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	if err == nil {
+		t.Fatal("Expected error for invalid username")
+	}
+}
+
+// Helper function for string contains check
+func contains(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
