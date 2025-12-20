@@ -13,26 +13,85 @@ type Option func(*loadOptions)
 
 // loadOptions holds the configuration options for Load.
 type loadOptions struct {
+	// validatorFactories provide validators for a field
+	validatorFactories []ValidatorFactory
 	// validators maps field paths to their validator functions
 	validators map[string][]Validator
+}
+
+// WithValidatorFactory registers a custom validator factory.
+// Validator factories inspect struct fields and automatically register validators
+// based on field metadata (type, tags, name, etc.).
+//
+// Factories are called for each field during Load, allowing you to:
+//   - Add validation based on custom struct tags
+//   - Apply type-specific validation rules
+//   - Implement domain-specific validation patterns
+//
+// Example: Adding email validation via custom tag:
+//
+//	factory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
+//	    if fieldType.Tag.Get("email") == "true" {
+//	        registry(func(value any) error {
+//	            email := value.(string)
+//	            if !strings.Contains(email, "@") {
+//	                return fmt.Errorf("invalid email format")
+//	            }
+//	            return nil
+//	        })
+//	    }
+//	    return nil
+//	}
+//	Load(&cfg, WithValidatorFactory(factory))
+//
+// Multiple factories can be registered and will be called in registration order.
+// The builtin factory (for min, max, and pattern tags) is always registered first.
+func WithValidatorFactory(factory ValidatorFactory) Option {
+	return func(opts *loadOptions) {
+		opts.addValidatorFactory(factory)
+	}
+}
+
+// withoutBuiltinValidators removes the builtin validators.
+// This option must be supplied first.
+// This option is intended for unit testing to allow the test code to isolate the
+// validation component.
+func withoutBuiltinValidators() Option {
+	return func(opts *loadOptions) {
+		opts.validatorFactories = make([]ValidatorFactory, 0)
+	}
 }
 
 // WithValidator registers a custom validator for a specific field path.
 // Path uses dot notation for nested fields (e.g., "AI.APIKey", "WebHook.Timeout").
 // Multiple validators can be registered for the same field; all will be executed in order.
+//
+// The validator receives the converted value (after type conversion from the environment
+// variable string) and should return an error if validation fails.
+//
+// Example: Validating a port is a multiple of 10:
+//
+//	Load(&cfg, WithValidator("Port", func(value any) error {
+//	    port := value.(int64)
+//	    if port%10 != 0 {
+//	        return fmt.Errorf("port must be multiple of 10")
+//	    }
+//	    return nil
+//	}))
+//
+// Use WithValidatorFactory instead if you want to apply validation based on
+// field metadata (tags, type, name) rather than explicit field paths.
 func WithValidator(path string, validator Validator) Option {
 	return func(opts *loadOptions) {
-		if opts.validators == nil {
-			opts.validators = make(map[string][]Validator)
-		}
-		opts.validators[path] = append(opts.validators[path], validator)
+		opts.addValidator(path, validator)
 	}
 }
 
 // newLoadOptions creates default load options.
 func newLoadOptions() *loadOptions {
 	return &loadOptions{
-		validators: make(map[string][]Validator),
+		validatorFactories: []ValidatorFactory{builtinValidatorFactory},
+		validators:         make(map[string][]Validator),
 	}
 }
 
@@ -44,7 +103,7 @@ func (opts *loadOptions) applyOptions(options []Option) {
 }
 
 // Load populates the given configuration struct from environment variables
-// using the `key`, `default`, `required`, `min`, and `max` struct tags.
+// using the `key`, `default`, `required`, `min`, `max`, and `pattern` struct tags.
 //
 // Value resolution follows this precedence (highest to lowest):
 //  1. Environment variable (if set)
@@ -57,13 +116,29 @@ func (opts *loadOptions) applyOptions(options []Option) {
 // Use required:"true" to enforce that a field must be set via environment
 // variable or default tag.
 //
-// Validation:
-//   - Use min:"value" and max:"value" tags for numeric range validation
-//   - Use WithValidator option for custom validation logic
+// Builtin Validation Tags:
+//   - min:"value" and max:"value": Numeric range validation (int, uint, float types)
+//   - pattern:"regex": Regular expression validation (string types only)
+//
+// Custom Validation:
+//   - WithValidator(path, validator): Add a validator for a specific field path
+//   - WithValidatorFactory(factory): Register a factory to auto-add validators based on field metadata
 //   - Validators run after type conversion but before field assignment
 //
 // Options:
-//   - WithValidator(path, validator): Register custom validator for a field
+//   - WithValidator(path, validator): Register custom validator for a specific field
+//   - WithValidatorFactory(factory): Register a custom validator factory
+//
+// Example:
+//
+//	type Config struct {
+//	    Port     int    `key:"PORT" default:"8080" min:"1024" max:"65535"`
+//	    Username string `key:"USERNAME" pattern:"^[a-zA-Z0-9_]+$"`
+//	    Email    string `key:"EMAIL"`
+//	}
+//
+//	cfg := Config{}
+//	err := Load(&cfg, WithValidator("Email", emailValidator))
 func Load(config interface{}, options ...Option) error {
 	v := reflect.ValueOf(config)
 	if v.Kind() != reflect.Ptr {
@@ -143,7 +218,7 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		}
 
 		// Parse min/max tags and register validators
-		if err := registerBuiltinValidators(fieldType, currentPath, opts); err != nil {
+		if err := registerValidators(fieldType, currentPath, opts); err != nil {
 			return err
 		}
 
@@ -244,4 +319,11 @@ func (opts *loadOptions) addValidator(fieldPath string, validator Validator) {
 		opts.validators = make(map[string][]Validator)
 	}
 	opts.validators[fieldPath] = append(opts.validators[fieldPath], validator)
+}
+
+func (opts *loadOptions) addValidatorFactory(factory ValidatorFactory) {
+	if opts.validatorFactories == nil {
+		opts.validatorFactories = make([]ValidatorFactory, 0, 1)
+	}
+	opts.validatorFactories = append(opts.validatorFactories, factory)
 }

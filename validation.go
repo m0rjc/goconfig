@@ -7,12 +7,63 @@ import (
 	"strconv"
 )
 
+// ValidatorRegistry is the callback to add a validator to the current field.
+// Validator factories call this function to register validators for a field.
+// The registry handles associating the validator with the current field path.
+type ValidatorRegistry func(validator Validator)
+
+// ValidatorFactory inspects a struct field and registers appropriate validators.
+// Factories can examine the field's type, tags, and name to determine which validators to add.
+// The registry parameter is used to register validators for the current field.
+//
+// Example: A factory that validates email fields based on a custom tag:
+//
+//	func emailValidatorFactory(fieldType reflect.StructField, registry ValidatorRegistry) error {
+//	    if fieldType.Tag.Get("email") == "true" {
+//	        registry(func(value any) error {
+//	            email := value.(string)
+//	            if !strings.Contains(email, "@") {
+//	                return fmt.Errorf("invalid email format")
+//	            }
+//	            return nil
+//	        })
+//	    }
+//	    return nil
+//	}
+//
+// Factories are called during configuration loading for each field that has a key tag.
+// They are called before values are loaded, so they only have access to field metadata.
+type ValidatorFactory func(fieldType reflect.StructField, registry ValidatorRegistry) error
+
 // Validator validates a field's value after type conversion.
-// The validator returns an error if the field value is not acceptable.
+// The validator receives the converted value and returns an error if validation fails.
+// Validators are called after the environment variable or default value is converted
+// to the field's type but before it is assigned to the struct field.
+//
+// The value parameter type depends on the field type:
+//   - int types receive int64
+//   - uint types receive uint64
+//   - float types receive float64
+//   - string types receive string
+//   - bool types receive bool
+//   - time.Duration types receive time.Duration
 type Validator func(value any) error
 
-// registerBuiltinValidators parses min and max tags and registers appropriate validators.
-func registerBuiltinValidators(fieldType reflect.StructField, fieldPath string, opts *loadOptions) error {
+// registerValidators registers any validators for the given field
+func registerValidators(fieldType reflect.StructField, fieldPath string, opts *loadOptions) error {
+	registry := func(validator Validator) {
+		opts.addValidator(fieldPath, validator)
+	}
+
+	for _, factory := range opts.validatorFactories {
+		if err := factory(fieldType, registry); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func builtinValidatorFactory(fieldType reflect.StructField, registry ValidatorRegistry) error {
 	minTag := fieldType.Tag.Get("min")
 	maxTag := fieldType.Tag.Get("max")
 	patternTag := fieldType.Tag.Get("pattern")
@@ -25,7 +76,7 @@ func registerBuiltinValidators(fieldType reflect.StructField, fieldPath string, 
 		if err != nil {
 			return fmt.Errorf("invalid min tag value %q for field %s: %w", minTag, fieldType.Name, err)
 		}
-		opts.addValidator(fieldPath, validator)
+		registry(validator)
 	}
 
 	// Register max validator
@@ -34,7 +85,7 @@ func registerBuiltinValidators(fieldType reflect.StructField, fieldPath string, 
 		if err != nil {
 			return fmt.Errorf("invalid max tag value %q for field %s: %w", maxTag, fieldType.Name, err)
 		}
-		opts.addValidator(fieldPath, validator)
+		registry(validator)
 	}
 
 	// Register pattern validator for strings
@@ -43,7 +94,7 @@ func registerBuiltinValidators(fieldType reflect.StructField, fieldPath string, 
 		if err != nil {
 			return fmt.Errorf("invalid pattern tag value %q for field %s: %w", patternTag, fieldType.Name, err)
 		}
-		opts.addValidator(fieldPath, validator)
+		registry(validator)
 	}
 
 	return nil
