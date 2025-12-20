@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"time"
@@ -31,7 +32,7 @@ func main() {
 	var config Config
 
 	// Load configuration from environment variables
-	if err := goconfigtools.Load(&config); err != nil {
+	if err := goconfigtools.Load(context.Background(), &config); err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 
