@@ -8,10 +8,6 @@ import (
 	"time"
 )
 
-// Validator validates a field's value after type conversion.
-// The validator is unaware of the field path - the library handles attachment.
-type Validator func(value any) error
-
 // Option is a functional option for configuring the Load function.
 type Option func(*loadOptions)
 
@@ -106,6 +102,8 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		}
 
 		// Handle nested structs
+		// TODO: When we implement custom marshallers allow a marshaller to be registered against
+		//       a whole struct and take over here.
 		if field.Kind() == reflect.Struct && fieldType.Type != reflect.TypeOf(time.Duration(0)) {
 			if err := loadStruct(field, currentPath, opts); err != nil {
 				return err
@@ -145,7 +143,7 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		}
 
 		// Parse min/max tags and register validators
-		if err := registerMinMaxValidators(fieldType, currentPath, opts); err != nil {
+		if err := registerBuiltinValidators(fieldType, currentPath, opts); err != nil {
 			return err
 		}
 
@@ -233,139 +231,17 @@ func setField(field reflect.Value, value string, key string, fieldPath string, o
 		field.SetUint(typedValue.(uint64))
 	case reflect.Float32, reflect.Float64:
 		field.SetFloat(typedValue.(float64))
+	default:
+		// My IDE warns me that this would be iota fields. We'd not expect an iota field here.
+		return fmt.Errorf("unsupported field type: %s", field.Kind())
 	}
 
 	return nil
 }
 
-// registerMinMaxValidators parses min and max tags and registers appropriate validators.
-func registerMinMaxValidators(fieldType reflect.StructField, fieldPath string, opts *loadOptions) error {
-	minTag := fieldType.Tag.Get("min")
-	maxTag := fieldType.Tag.Get("max")
-
-	if minTag == "" && maxTag == "" {
-		return nil
+func (opts *loadOptions) addValidator(fieldPath string, validator Validator) {
+	if opts.validators == nil {
+		opts.validators = make(map[string][]Validator)
 	}
-
-	kind := fieldType.Type.Kind()
-
-	// Register min validator
-	if minTag != "" {
-		validator, err := createMinValidator(kind, minTag)
-		if err != nil {
-			return fmt.Errorf("invalid min tag value %q for field %s: %w", minTag, fieldType.Name, err)
-		}
-		if opts.validators == nil {
-			opts.validators = make(map[string][]Validator)
-		}
-		opts.validators[fieldPath] = append(opts.validators[fieldPath], validator)
-	}
-
-	// Register max validator
-	if maxTag != "" {
-		validator, err := createMaxValidator(kind, maxTag)
-		if err != nil {
-			return fmt.Errorf("invalid max tag value %q for field %s: %w", maxTag, fieldType.Name, err)
-		}
-		if opts.validators == nil {
-			opts.validators = make(map[string][]Validator)
-		}
-		opts.validators[fieldPath] = append(opts.validators[fieldPath], validator)
-	}
-
-	return nil
-}
-
-// createMinValidator creates a minimum value validator for the given type.
-func createMinValidator(kind reflect.Kind, minStr string) (Validator, error) {
-	switch kind {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		min, err := strconv.ParseInt(minStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(int64)
-			if v < min {
-				return fmt.Errorf("value %d is below minimum %d", v, min)
-			}
-			return nil
-		}, nil
-
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		min, err := strconv.ParseUint(minStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(uint64)
-			if v < min {
-				return fmt.Errorf("value %d is below minimum %d", v, min)
-			}
-			return nil
-		}, nil
-
-	case reflect.Float32, reflect.Float64:
-		min, err := strconv.ParseFloat(minStr, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(float64)
-			if v < min {
-				return fmt.Errorf("value %f is below minimum %f", v, min)
-			}
-			return nil
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("min tag not supported for type %s", kind)
-	}
-}
-
-// createMaxValidator creates a maximum value validator for the given type.
-func createMaxValidator(kind reflect.Kind, maxStr string) (Validator, error) {
-	switch kind {
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		max, err := strconv.ParseInt(maxStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(int64)
-			if v > max {
-				return fmt.Errorf("value %d exceeds maximum %d", v, max)
-			}
-			return nil
-		}, nil
-
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		max, err := strconv.ParseUint(maxStr, 10, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(uint64)
-			if v > max {
-				return fmt.Errorf("value %d exceeds maximum %d", v, max)
-			}
-			return nil
-		}, nil
-
-	case reflect.Float32, reflect.Float64:
-		max, err := strconv.ParseFloat(maxStr, 64)
-		if err != nil {
-			return nil, err
-		}
-		return func(value any) error {
-			v := value.(float64)
-			if v > max {
-				return fmt.Errorf("value %f exceeds maximum %f", v, max)
-			}
-			return nil
-		}, nil
-
-	default:
-		return nil, fmt.Errorf("max tag not supported for type %s", kind)
-	}
+	opts.validators[fieldPath] = append(opts.validators[fieldPath], validator)
 }

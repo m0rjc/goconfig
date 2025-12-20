@@ -607,3 +607,401 @@ func TestLoad_BackwardCompatibility(t *testing.T) {
 		t.Errorf("Expected APIKey to be 'test-key', got %q", cfg.AI.APIKey)
 	}
 }
+
+func TestLoad_PatternValidation_SimplePattern(t *testing.T) {
+	type UsernameConfig struct {
+		Username string `key:"USERNAME" pattern:"^[a-zA-Z0-9_]+$"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+		errMsg    string
+	}{
+		{"valid alphanumeric", "user123", false, ""},
+		{"valid with underscore", "user_name", false, ""},
+		{"invalid with space", "user name", true, "value user name does not match pattern ^[a-zA-Z0-9_]+$"},
+		{"invalid with dash", "user-name", true, "value user-name does not match pattern ^[a-zA-Z0-9_]+$"},
+		{"invalid with special char", "user@name", true, "value user@name does not match pattern ^[a-zA-Z0-9_]+$"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("USERNAME", tt.value)
+
+			var cfg UsernameConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
+				}
+				if err.Error() != "invalid value for USERNAME: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "invalid value for USERNAME: "+tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+				if cfg.Username != tt.value {
+					t.Errorf("Expected Username to be %q, got %q", tt.value, cfg.Username)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_EmailPattern(t *testing.T) {
+	type EmailConfig struct {
+		Email string `key:"EMAIL" pattern:"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+	}{
+		{"valid simple email", "user@example.com", false},
+		{"valid email with dots", "user.name@example.com", false},
+		{"valid email with plus", "user+tag@example.com", false},
+		{"valid email with subdomain", "user@mail.example.com", false},
+		{"invalid no at sign", "userexample.com", true},
+		{"invalid no domain", "user@", true},
+		{"invalid no tld", "user@example", true},
+		{"invalid spaces", "user @example.com", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("EMAIL", tt.value)
+
+			var cfg EmailConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error for value %q, got %v", tt.value, err)
+				}
+				if cfg.Email != tt.value {
+					t.Errorf("Expected Email to be %q, got %q", tt.value, cfg.Email)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_URLPattern(t *testing.T) {
+	type URLConfig struct {
+		WebhookURL string `key:"WEBHOOK_URL" pattern:"^https?://[a-zA-Z0-9.-]+.*$"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+	}{
+		{"valid http", "http://example.com", false},
+		{"valid https", "https://example.com", false},
+		{"valid with path", "https://example.com/webhook", false},
+		{"valid with query", "https://example.com/webhook?token=123", false},
+		{"invalid ftp", "ftp://example.com", true},
+		{"invalid no protocol", "example.com", true},
+		{"invalid ws protocol", "ws://example.com", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("WEBHOOK_URL", tt.value)
+
+			var cfg URLConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error for value %q, got %v", tt.value, err)
+				}
+				if cfg.WebhookURL != tt.value {
+					t.Errorf("Expected WebhookURL to be %q, got %q", tt.value, cfg.WebhookURL)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_InvalidRegex(t *testing.T) {
+	type BadPatternConfig struct {
+		Field string `key:"FIELD" pattern:"[invalid(regex"`
+	}
+
+	os.Clearenv()
+	os.Setenv("FIELD", "value")
+
+	var cfg BadPatternConfig
+	err := Load(&cfg)
+	if err == nil {
+		t.Fatal("Expected error for invalid regex pattern")
+	}
+
+	// Should contain an error about invalid pattern
+	if err.Error() == "" {
+		t.Error("Expected non-empty error message for invalid regex")
+	}
+}
+
+func TestLoad_PatternValidation_OnNonStringType(t *testing.T) {
+	type InvalidConfig struct {
+		Port int `key:"PORT" pattern:"^[0-9]+$"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg InvalidConfig
+	err := Load(&cfg)
+	if err == nil {
+		t.Fatal("Expected error for pattern tag on non-string type")
+	}
+
+	// The error message includes information about the pattern tag not being supported
+	expectedMsg := "pattern tag not supported for type int"
+	if err.Error() != "invalid pattern tag value \"\" for field Port: "+expectedMsg {
+		t.Errorf("Expected error %q, got %q", "invalid pattern tag value \"\" for field Port: "+expectedMsg, err.Error())
+	}
+}
+
+func TestLoad_PatternValidation_WithDefaultValue(t *testing.T) {
+	type ConfigWithDefault struct {
+		APIKey string `key:"API_KEY" default:"test_key_123" pattern:"^[a-z_0-9]+$"`
+	}
+
+	tests := []struct {
+		name      string
+		setValue  bool
+		value     string
+		shouldErr bool
+	}{
+		{"default value matches", false, "", false},
+		{"env value matches", true, "prod_key_456", false},
+		{"env value doesn't match", true, "INVALID-KEY", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			if tt.setValue {
+				os.Setenv("API_KEY", tt.value)
+			}
+
+			var cfg ConfigWithDefault
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error, got %v", err)
+				}
+				expectedValue := tt.value
+				if !tt.setValue {
+					expectedValue = "test_key_123"
+				}
+				if cfg.APIKey != expectedValue {
+					t.Errorf("Expected APIKey to be %q, got %q", expectedValue, cfg.APIKey)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_NestedStruct(t *testing.T) {
+	type DatabaseConfig struct {
+		ConnectionString string `key:"DB_CONN" pattern:"^[a-zA-Z]+://.*$"`
+	}
+
+	type AppConfig struct {
+		Database DatabaseConfig
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+	}{
+		{"valid postgres", "postgresql://localhost:5432/db", false},
+		{"valid mysql", "mysql://localhost:3306/db", false},
+		{"invalid no protocol", "localhost:5432/db", true},
+		{"invalid ends with colon", "postgres:", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("DB_CONN", tt.value)
+
+			var cfg AppConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error for value %q, got %v", tt.value, err)
+				}
+				if cfg.Database.ConnectionString != tt.value {
+					t.Errorf("Expected ConnectionString to be %q, got %q", tt.value, cfg.Database.ConnectionString)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_WithMinMaxAndCustomValidator(t *testing.T) {
+	type ComplexConfig struct {
+		Port     int    `key:"PORT" default:"8080" min:"1024" max:"65535"`
+		Hostname string `key:"HOSTNAME" pattern:"^[a-z0-9-]+$"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+	os.Setenv("HOSTNAME", "web-server-01")
+
+	var cfg ComplexConfig
+	err := Load(&cfg, WithValidator("Port", func(value any) error {
+		port := value.(int64)
+		if port%10 != 0 {
+			return fmt.Errorf("port must be multiple of 10")
+		}
+		return nil
+	}))
+
+	if err != nil {
+		t.Fatalf("Expected no error, got %v", err)
+	}
+
+	if cfg.Port != 8080 {
+		t.Errorf("Expected Port to be 8080, got %d", cfg.Port)
+	}
+
+	if cfg.Hostname != "web-server-01" {
+		t.Errorf("Expected Hostname to be 'web-server-01', got %q", cfg.Hostname)
+	}
+
+	// Test pattern validation failure
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+	os.Setenv("HOSTNAME", "UPPERCASE")
+
+	var cfg2 ComplexConfig
+	err = Load(&cfg2)
+	if err == nil {
+		t.Fatal("Expected error for invalid hostname pattern")
+	}
+
+	// Test port validation failure
+	os.Clearenv()
+	os.Setenv("PORT", "500")
+	os.Setenv("HOSTNAME", "valid-host")
+
+	var cfg3 ComplexConfig
+	err = Load(&cfg3)
+	if err == nil {
+		t.Fatal("Expected error for port below minimum")
+	}
+}
+
+func TestLoad_PatternValidation_CaseSensitive(t *testing.T) {
+	type CaseSensitiveConfig struct {
+		Code string `key:"CODE" pattern:"^[a-z]{3}$"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+	}{
+		{"lowercase matches", "abc", false},
+		{"uppercase doesn't match", "ABC", true},
+		{"mixed case doesn't match", "Abc", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("CODE", tt.value)
+
+			var cfg CaseSensitiveConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error for value %q, got %v", tt.value, err)
+				}
+			}
+		})
+	}
+}
+
+func TestLoad_PatternValidation_SpecialCharacters(t *testing.T) {
+	type TokenConfig struct {
+		// Pattern that allows alphanumeric, underscores, and hyphens
+		Token string `key:"TOKEN" pattern:"^[a-zA-Z0-9_-]{8,}$"`
+	}
+
+	tests := []struct {
+		name      string
+		value     string
+		shouldErr bool
+	}{
+		{"valid token with letters and numbers", "abcd1234", false},
+		{"valid token with underscore", "test_token_123", false},
+		{"valid token with hyphen", "test-token-123", false},
+		{"valid mixed case", "TestToken123", false},
+		{"invalid with spaces", "test token", true},
+		{"invalid with special char", "test@token", true},
+		{"invalid too short", "test", true},
+		{"invalid with dot", "test.token", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
+			os.Setenv("TOKEN", tt.value)
+
+			var cfg TokenConfig
+			err := Load(&cfg)
+
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error for value %q, got nil", tt.value)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("Expected no error for value %q, got %v", tt.value, err)
+				}
+				if cfg.Token != tt.value {
+					t.Errorf("Expected Token to be %q, got %q", tt.value, cfg.Token)
+				}
+			}
+		})
+	}
+}

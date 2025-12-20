@@ -126,6 +126,10 @@ If a value is outside the specified range, you'll get a clear error message:
 invalid value for PORT: value 500 is below minimum 1024
 ```
 
+### Pattern Validation
+
+Use `pattern` to specify a regular expression to test string values.
+
 ### Custom Validators
 
 Use the `WithValidator` option to add custom validation logic:
