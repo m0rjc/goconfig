@@ -1,0 +1,54 @@
+name: Test Examples
+
+permissions:
+  contents: read
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  test-examples:
+    name: Run Examples
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.25'
+          cache: true
+
+      - name: Verify dependencies
+        run: go mod download && go mod verify
+
+      - name: Discover and run examples
+        run: |
+          # Find all example directories (those containing main.go)
+          echo "🔍 Discovering examples..."
+          for example_dir in example/*/; do
+            if [ -f "${example_dir}main.go" ]; then
+              example_name=$(basename "$example_dir")
+              echo ""
+              echo "▶️  Running example: $example_name"
+              echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+              cd "$example_dir"
+              if go run . ; then
+                echo "✅ $example_name completed successfully"
+              else
+                echo "❌ $example_name failed"
+                exit 1
+              fi
+              cd - > /dev/null
+            fi
+          done
+
+          echo ""
+          echo "✨ All examples completed successfully"
+
