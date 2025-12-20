@@ -1,5 +1,13 @@
 # Changelog
 
+## [v1.0.0-beta.2] - 2025-12-20
+
+### Fixed
+
+- **Min and Max Durations**: The `min` and `max` tags now support durations
+- **Restructured documentation**: Asked Claude to restructure the docs so that its future self can do a better job of
+  using this code. It's no longer my voice, but I think that's clear enough to anybody reading.
+
 ## [v1.0.0-beta.1] - 2025-12-20
 
 ### Breaking Changes
