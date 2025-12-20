@@ -69,7 +69,8 @@ func main() {
 - `min`: Minimum value for numeric types (optional)
 - `max`: Maximum value for numeric types (optional)
 - `pattern`: Regular expression for string types (optional)
-- `required`: Set to "true" to require the field to be set (optional)
+- `required`: Set to "true" to require the field to not be empty (optional)
+- `keyRequired`: Set to "true" to require the field to present, though it can be explicitly blank
 
 ## Supported Types
 
@@ -106,6 +107,30 @@ export WEBHOOK_TIMEOUT="30s"
 # ENABLE_AI will default to "false"
 go run example/main.go
 ```
+
+
+### Defaulting behaviour and required fields
+
+* The `required="true"` tag checks that the key is both present and has a non-blank value.
+* The `keyRequired="true"` tag requires the key to be present, but it may have a blank value.
+* Failing the above errors, the value is set on the struct if the key is found in configuration
+* If the key is absent then the value is not modified. This allows a struct to be passed with initialised defaults.
+
+When using environment variables (default Key Store)
+
+| Environment      | No Required Tags         | keyRequired="true"     | required="true"     |
+|------------------|--------------------------|------------------------|---------------------|
+| `export FOO=bar` | Value becomes "bar"      | Value becomes "bar"    | Value becomes "bar" |
+| `export FOO=`    | Value becomes ""         | Value becomes ""       | _Error_             |
+| `unset FOO`      | Value remains unchanged  | _Error_                | _Error_             |
+
+**Important notes about `default` tags:**
+
+* When a key is **unset**, the `default` value is used. This satisfies both `keyRequired="true"` and `required="true"`.
+* When a key is **set to empty** (e.g., `export FOO=`), it overrides the default and the empty value is used. This will cause an error if `required="true"`.
+* Defaults are only applied when the key is completely absent from the key store.
+
+The sentinel errors are ErrMissingConfigKey and ErrMissingValue.
 
 ## Validation
 
@@ -269,6 +294,11 @@ type Config struct {
 	Value *ModelParameters `key:"OPENAI_MODEL_PARAMS"`
 }
 ```
+
+### Error Handling
+
+See the LogError function in `errors.go` for an example of logging errors from the Load function to a
+structured log.
 
 ## Running Tests
 

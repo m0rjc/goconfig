@@ -1,6 +1,7 @@
 package goconfigtools
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -33,7 +34,7 @@ func TestLoad_WithDefaults(t *testing.T) {
 	os.Setenv("OPENAI_API_KEY", "test-key-123")
 
 	var cfg Config
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -73,7 +74,7 @@ func TestLoad_WithOverrides(t *testing.T) {
 	os.Setenv("ENABLE_AI", "true")
 
 	var cfg Config
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -101,7 +102,7 @@ func TestLoad_MissingRequiredField(t *testing.T) {
 
 	// Don't set the required field
 	var cfg Config
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err == nil {
 		t.Fatal("Expected error for missing required field OPENAI_API_KEY")
 	}
@@ -118,7 +119,7 @@ func TestLoad_OptionalFields(t *testing.T) {
 	os.Setenv("REQUIRED_FIELD", "set")
 
 	var cfg OptionalConfig
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -154,7 +155,7 @@ func TestLoad_PreInitializedDefaults(t *testing.T) {
 		CodedDefault: "coded-default-3",
 	}
 
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -209,7 +210,7 @@ func TestLoad_InvalidTypes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tt.setup()
 			var cfg Config
-			err := Load(&cfg)
+			err := Load(context.Background(), &cfg)
 			if err == nil {
 				t.Fatalf("Expected error containing %q, got nil", tt.errorMsg)
 			}
@@ -219,7 +220,7 @@ func TestLoad_InvalidTypes(t *testing.T) {
 
 func TestLoad_NotAPointer(t *testing.T) {
 	var cfg Config
-	err := Load(cfg) // Not a pointer
+	err := Load(context.Background(), cfg) // Not a pointer
 	if err == nil {
 		t.Fatal("Expected error when config is not a pointer")
 	}
@@ -235,7 +236,7 @@ func TestLoad_IntAndUintTypes(t *testing.T) {
 	os.Clearenv()
 
 	var cfg IntConfig
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -261,7 +262,7 @@ func TestLoad_FloatTypes(t *testing.T) {
 	os.Clearenv()
 
 	var cfg FloatConfig
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
@@ -281,7 +282,7 @@ func TestLoad_BackwardCompatibility(t *testing.T) {
 	os.Setenv("WEBHOOK_TIMEOUT", "30s")
 
 	var cfg Config
-	if err := Load(&cfg); err != nil {
+	if err := Load(context.Background(), &cfg); err != nil {
 		t.Fatalf("Load without options failed: %v", err)
 	}
 
@@ -339,7 +340,7 @@ func TestLoad_WithValidator_RootField(t *testing.T) {
 			os.Setenv("PORT", tt.value)
 
 			var cfg SimpleConfig
-			err := Load(&cfg, WithValidator("Port", tt.validator))
+			err := Load(context.Background(), &cfg, WithValidator("Port", tt.validator))
 
 			if tt.shouldErr {
 				if err == nil {
@@ -368,7 +369,7 @@ func TestLoad_WithValidator_NestedField(t *testing.T) {
 	os.Setenv("DB_HOST", "192.168.1.1")
 
 	var cfg NestedConfig
-	err := Load(&cfg, WithValidator("Database.Host", func(value any) error {
+	err := Load(context.Background(), &cfg, WithValidator("Database.Host", func(value any) error {
 		host := value.(string)
 		if host == "192.168.1.1" {
 			return fmt.Errorf("IP addresses not allowed")
@@ -394,7 +395,7 @@ func TestLoad_WithValidator_MultipleValidators(t *testing.T) {
 	os.Setenv("PORT", "8080")
 
 	var cfg PortConfig
-	err := Load(&cfg,
+	err := Load(context.Background(), &cfg,
 		WithValidator("Port", func(value any) error {
 			port := value.(int64)
 			if port < 1024 {
@@ -419,7 +420,7 @@ func TestLoad_WithValidator_MultipleValidators(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
-	err = Load(&cfg2,
+	err = Load(context.Background(), &cfg2,
 		WithValidator("Port", func(value any) error {
 			port := value.(int64)
 			if port < 1024 {
@@ -452,7 +453,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	os.Setenv("PORT", "8080")
 
 	var cfg PortConfig
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err != nil {
 		t.Fatalf("Expected no error for valid value, got %v", err)
 	}
@@ -461,7 +462,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
-	err = Load(&cfg2)
+	err = Load(context.Background(), &cfg2)
 	if err == nil {
 		t.Fatal("Expected error for value below minimum")
 	}
@@ -473,7 +474,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("PORT", "70000")
 	var cfg3 PortConfig
-	err = Load(&cfg3)
+	err = Load(context.Background(), &cfg3)
 	if err == nil {
 		t.Fatal("Expected error for value above maximum")
 	}
@@ -496,7 +497,7 @@ func TestLoad_BuiltinValidators_NestedField(t *testing.T) {
 	os.Setenv("DB_CONN", "postgresql://localhost:5432/db")
 
 	var cfg AppConfig
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err != nil {
 		t.Fatalf("Expected no error for valid value, got %v", err)
 	}
@@ -509,7 +510,7 @@ func TestLoad_BuiltinValidators_NestedField(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("DB_CONN", "localhost:5432/db")
 	var cfg2 AppConfig
-	err = Load(&cfg2)
+	err = Load(context.Background(), &cfg2)
 	if err == nil {
 		t.Fatal("Expected error for invalid pattern")
 	}
@@ -524,7 +525,7 @@ func TestLoad_BuiltinValidators_WithDefaultValue(t *testing.T) {
 	os.Clearenv()
 
 	var cfg ConfigWithDefault
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err != nil {
 		t.Fatalf("Expected no error for valid default value, got %v", err)
 	}
@@ -537,7 +538,7 @@ func TestLoad_BuiltinValidators_WithDefaultValue(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("API_KEY", "INVALID-KEY")
 	var cfg2 ConfigWithDefault
-	err = Load(&cfg2)
+	err = Load(context.Background(), &cfg2)
 	if err == nil {
 		t.Fatal("Expected error for invalid env value")
 	}
@@ -552,7 +553,7 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 	os.Setenv("PORT", "8085")
 
 	var cfg PortConfig
-	err := Load(&cfg, WithValidator("Port", func(value any) error {
+	err := Load(context.Background(), &cfg, WithValidator("Port", func(value any) error {
 		port := value.(int64)
 		if port%10 != 0 {
 			return fmt.Errorf("port must be multiple of 10")
@@ -572,7 +573,7 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 	os.Clearenv()
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
-	err = Load(&cfg2)
+	err = Load(context.Background(), &cfg2)
 	if err == nil || err.Error() != "PORT: value 500 is below minimum 1024" {
 		t.Errorf("Expected min validation to fail, got %v", err)
 	}
@@ -586,7 +587,7 @@ func TestLoad_BuiltinValidators_InvalidTags(t *testing.T) {
 	os.Clearenv()
 
 	var cfg BadMinConfig
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err == nil {
 		t.Fatal("Expected error for invalid min tag")
 	}
@@ -596,7 +597,7 @@ func TestLoad_BuiltinValidators_InvalidTags(t *testing.T) {
 	}
 
 	var cfg2 BadMaxConfig
-	err = Load(&cfg2)
+	err = Load(context.Background(), &cfg2)
 	if err == nil {
 		t.Fatal("Expected error for invalid max tag")
 	}
@@ -607,7 +608,7 @@ func TestLoad_BuiltinValidators_InvalidTags(t *testing.T) {
 
 	os.Setenv("FIELD", "value")
 	var cfg3 BadPatternConfig
-	err = Load(&cfg3)
+	err = Load(context.Background(), &cfg3)
 	if err == nil {
 		t.Fatal("Expected error for invalid regex pattern")
 	}
@@ -622,7 +623,7 @@ func TestLoad_BuiltinValidators_UnsupportedTypes(t *testing.T) {
 	os.Setenv("PORT", "8080")
 
 	var cfg InvalidConfig
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 	if err == nil {
 		t.Fatal("Expected error for pattern tag on non-string type")
 	}
@@ -659,7 +660,7 @@ func TestLoad_WithValidatorFactory(t *testing.T) {
 	os.Setenv("USERNAME", "testuser")
 
 	var cfg EmailConfig
-	err := Load(&cfg, WithValidatorFactory(emailFactory))
+	err := Load(context.Background(), &cfg, WithValidatorFactory(emailFactory))
 	if err != nil {
 		t.Fatalf("Expected no error for valid email, got %v", err)
 	}
@@ -674,7 +675,7 @@ func TestLoad_WithValidatorFactory(t *testing.T) {
 	os.Setenv("USERNAME", "testuser")
 
 	var cfg2 EmailConfig
-	err = Load(&cfg2, WithValidatorFactory(emailFactory))
+	err = Load(context.Background(), &cfg2, WithValidatorFactory(emailFactory))
 	if err == nil {
 		t.Fatal("Expected error for invalid email")
 	}
@@ -724,7 +725,7 @@ func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
 	os.Setenv("USERNAME", "user123")
 
 	var cfg Config
-	err := Load(&cfg, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	err := Load(context.Background(), &cfg, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -735,7 +736,7 @@ func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
 	os.Setenv("USERNAME", "user123")
 
 	var cfg2 Config
-	err = Load(&cfg2, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	err = Load(context.Background(), &cfg2, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
 	if err == nil {
 		t.Fatal("Expected error for invalid email")
 	}
@@ -746,7 +747,7 @@ func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
 	os.Setenv("USERNAME", "user-123")
 
 	var cfg3 Config
-	err = Load(&cfg3, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
+	err = Load(context.Background(), &cfg3, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
 	if err == nil {
 		t.Fatal("Expected error for invalid username")
 	}
@@ -755,7 +756,7 @@ func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
 // TestLoad_MultipleRuntimeErrors tests that multiple runtime errors are collected and reported together
 func TestLoad_MultipleRuntimeErrors(t *testing.T) {
 	type Config struct {
-		RequiredField string `key:"REQ" required:"true"`
+		RequiredField string `key:"REQ" keyRequired:"true"`
 		BadInt        int    `key:"BAD_INT"`
 		OutOfRange    int    `key:"OUT_OF_RANGE" min:"10" max:"100"`
 	}
@@ -765,7 +766,7 @@ func TestLoad_MultipleRuntimeErrors(t *testing.T) {
 	os.Setenv("OUT_OF_RANGE", "500")
 
 	var cfg Config
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 
 	// Should return a ConfigErrors type
 	configErr, ok := err.(*ConfigErrors)
@@ -790,7 +791,7 @@ func TestLoad_MultipleRuntimeErrors(t *testing.T) {
 	}
 
 	// Verify error message contains expected substrings
-	if !contains(errMsg, "required environment variable") {
+	if !contains(errMsg, ErrMissingConfigKey.Error()) {
 		t.Error("Error should mention required environment variable")
 	}
 	if !contains(errMsg, "ParseInt") {
@@ -817,7 +818,7 @@ func TestLoad_NestedStructWithMultipleErrors(t *testing.T) {
 	os.Setenv("DB_PORT", "500") // Below minimum
 
 	var cfg Config
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 
 	configErr, ok := err.(*ConfigErrors)
 	if !ok {
@@ -850,7 +851,7 @@ func TestConfigErrors_Unwrap(t *testing.T) {
 	os.Clearenv()
 
 	var cfg Config
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 
 	configErr, ok := err.(*ConfigErrors)
 	if !ok {
@@ -880,7 +881,7 @@ func TestLoad_ConfigErrorsStillFailFast(t *testing.T) {
 	os.Setenv("PORT", "8080")
 
 	var cfg BadConfig
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 
 	// Should get a regular error, not ConfigErrors, since this is a configuration error
 	if err == nil {
@@ -912,7 +913,7 @@ func TestLoad_MultipleValidationErrors(t *testing.T) {
 	os.Setenv("PORT3", "abc")   // Invalid type
 
 	var cfg Config
-	err := Load(&cfg)
+	err := Load(context.Background(), &cfg)
 
 	configErr, ok := err.(*ConfigErrors)
 	if !ok {
@@ -935,15 +936,15 @@ func TestLoad_CustomKeystore_ReadsFromStore(t *testing.T) {
 		Value string `key:"custom_key" required:"true"`
 	}
 
-	keyStore := func(key string) (string, error) {
-		return key + ":OK", nil
+	keyStore := func(ctx context.Context, key string) (string, bool, error) {
+		return key + ":OK", true, nil
 	}
 
 	config := Config{
 		Value: "Value was not modified",
 	}
 
-	err := Load(&config, WithKeyStore(keyStore))
+	err := Load(context.Background(), &config, WithKeyStore(keyStore))
 	if err != nil {
 		t.Fatalf("Error loading custom keystore: %v", err)
 	}
@@ -955,28 +956,60 @@ func TestLoad_CustomKeystore_ReadsFromStore(t *testing.T) {
 
 func TestLoad_CustomKeystore_PassesBackError(t *testing.T) {
 	type Config struct {
-		Value string `key:"custom_key" required:"true"`
+		Field1 string `key:"FIELD1" required:"true"`
+		Field2 string `key:"FIELD2" required:"true"`
+		Field3 string `key:"FIELD3" required:"true"`
 	}
 
-	expectedError := errors.New("custom_key:error")
+	expectedError := errors.New("keystore connection failed")
 
-	keyStore := func(key string) (string, error) {
-		return "", expectedError
+	keyStore := func(ctx context.Context, key string) (string, bool, error) {
+		// First field succeeds
+		if key == "FIELD1" {
+			return "value1", true, nil
+		}
+		// Second field returns a fatal keystore error
+		if key == "FIELD2" {
+			return "", false, expectedError
+		}
+		// Third field should never be reached
+		return "value3", true, nil
 	}
 
 	config := Config{
-		Value: "Value was not modified",
+		Field1: "initial1",
+		Field2: "initial2",
+		Field3: "initial3",
 	}
 
-	err := Load(&config, WithKeyStore(keyStore))
+	err := Load(context.Background(), &config, WithKeyStore(keyStore))
 	if err == nil {
 		t.Fatalf("No error was returned when loading the custom store")
 	}
-	if !errors.Is(err, expectedError) {
-		t.Fatalf("Incorrect error loading custom keystore: %v", err)
+
+	// Verify the error is NOT a ConfigErrors - keystore errors should be fatal
+	if _, isConfigErrors := err.(*ConfigErrors); isConfigErrors {
+		t.Fatalf("Expected keystore error to be fatal, not collected in ConfigErrors")
 	}
-	if config.Value != "Value was not modified" {
-		t.Fatalf("Value was modified despite error, got %s", config.Value)
+
+	// Verify the error is (or wraps) the expected error
+	if !errors.Is(err, expectedError) {
+		t.Fatalf("Expected error to be or wrap keystore error, got: %v", err)
+	}
+
+	// Verify Field1 was updated (it succeeded before the error)
+	if config.Field1 != "value1" {
+		t.Fatalf("Expected Field1 to be 'value1', got %s", config.Field1)
+	}
+
+	// Verify Field2 was not modified (error occurred)
+	if config.Field2 != "initial2" {
+		t.Fatalf("Field2 should not have been modified, got %s", config.Field2)
+	}
+
+	// Verify Field3 was not modified (processing stopped)
+	if config.Field3 != "initial3" {
+		t.Fatalf("Field3 should not have been modified (processing should have stopped), got %s", config.Field3)
 	}
 }
 
@@ -985,15 +1018,15 @@ func TestLoad_JsonInterface_Parses(t *testing.T) {
 		Value map[string]interface{} `key:"OPENAI_MODEL_PARAMS"`
 	}
 
-	keyStore := func(key string) (string, error) {
+	keyStore := func(ctx context.Context, key string) (string, bool, error) {
 		if key == "OPENAI_MODEL_PARAMS" {
-			return "{\"marker\":\"present\"}", nil
+			return "{\"marker\":\"present\"}", true, nil
 		}
-		return "", fmt.Errorf("bad key passed %s", key)
+		return "", false, fmt.Errorf("bad key passed %s", key)
 	}
 
 	config := Config{}
-	err := Load(&config, WithKeyStore(keyStore))
+	err := Load(context.Background(), &config, WithKeyStore(keyStore))
 	if err != nil {
 		t.Fatalf("Error loading custom keystore: %v", err)
 	}
@@ -1016,15 +1049,15 @@ func TestLoad_JsonTypes_Parses(t *testing.T) {
 		Value TypedJsonStruct `key:"OPENAI_MODEL_PARAMS"`
 	}
 
-	keyStore := func(key string) (string, error) {
+	keyStore := func(ctx context.Context, key string) (string, bool, error) {
 		if key == "OPENAI_MODEL_PARAMS" {
-			return "{\"marker\":\"present\"}", nil
+			return "{\"marker\":\"present\"}", true, nil
 		}
-		return "", fmt.Errorf("bad key passed %s", key)
+		return "", false, fmt.Errorf("bad key passed %s", key)
 	}
 
 	config := Config{}
-	err := Load(&config, WithKeyStore(keyStore))
+	err := Load(context.Background(), &config, WithKeyStore(keyStore))
 	if err != nil {
 		t.Fatalf("Error loading custom keystore: %v", err)
 	}
@@ -1043,15 +1076,15 @@ func TestLoad_JsonPointerTypes_Parses(t *testing.T) {
 		Value *TypedJsonStruct `key:"OPENAI_MODEL_PARAMS"`
 	}
 
-	keyStore := func(key string) (string, error) {
+	keyStore := func(ctx context.Context, key string) (string, bool, error) {
 		if key == "OPENAI_MODEL_PARAMS" {
-			return "{\"marker\":\"present\"}", nil
+			return "{\"marker\":\"present\"}", true, nil
 		}
-		return "", fmt.Errorf("bad key passed %s", key)
+		return "", false, fmt.Errorf("bad key passed %s", key)
 	}
 
 	config := Config{}
-	err := Load(&config, WithKeyStore(keyStore))
+	err := Load(context.Background(), &config, WithKeyStore(keyStore))
 	if err != nil {
 		t.Fatalf("Error loading custom keystore: %v", err)
 	}

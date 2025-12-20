@@ -1,6 +1,7 @@
 package goconfigtools
 
 import (
+	"context"
 	"fmt"
 	"reflect"
 )
@@ -157,7 +158,7 @@ func (opts *loadOptions) applyOptions(options []Option) {
 //
 //	cfg := Config{}
 //	err := Load(&cfg, WithValidator("Email", emailValidator))
-func Load(config interface{}, options ...Option) error {
+func Load(ctx context.Context, config interface{}, options ...Option) error {
 	v := reflect.ValueOf(config)
 	if v.Kind() != reflect.Ptr {
 		return fmt.Errorf("config must be a pointer to a struct")
@@ -171,8 +172,8 @@ func Load(config interface{}, options ...Option) error {
 	opts := newLoadOptions()
 	opts.applyOptions(options)
 
-	errors := &ConfigErrors{errors: make([]configError, 0)}
-	if err := loadStruct(v, "", opts, errors); err != nil {
+	errors := &ConfigErrors{Errors: make([]ConfigError, 0)}
+	if err := loadStruct(ctx, v, "", opts, errors); err != nil {
 		return err // configuration error, fail-fast
 	}
 
@@ -184,7 +185,7 @@ func Load(config interface{}, options ...Option) error {
 
 // loadStruct recursively loads configuration values into a struct.
 // fieldPath tracks the current position in the struct hierarchy for validators.
-func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *ConfigErrors) error {
+func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *loadOptions, errors *ConfigErrors) error {
 	t := v.Type()
 
 	for i := 0; i < v.NumField(); i++ {
@@ -207,7 +208,7 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *Co
 		if key == "" {
 			// If it's a struct then recurse into it
 			if field.Kind() == reflect.Struct {
-				if err := loadStruct(field, currentPath, opts, errors); err != nil {
+				if err := loadStruct(ctx, field, currentPath, opts, errors); err != nil {
 					return err
 				}
 			}
@@ -215,19 +216,23 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *Co
 			continue
 		}
 
-		configuredValue, err := getConfiguredValue(fieldType.Tag, key, opts)
+		configuredValue, present, err := getConfiguredValue(ctx, fieldType.Tag, key, opts)
 		if err != nil {
-			errors.Add(key, fmt.Errorf("error reading key %s: %w", key, err))
+			return err
+		}
+
+		isKeyRequired := fieldType.Tag.Get("keyRequired") == "true"
+		isValueRequired := fieldType.Tag.Get("required") == "true"
+		if !present {
+			if isKeyRequired || isValueRequired {
+				errors.Add(key, ErrMissingConfigKey)
+			}
 			continue
 		}
 
 		// If empty, check if it's required
-		if configuredValue == "" {
-			required := fieldType.Tag.Get("required") == "true"
-			if required {
-				errors.Add(key, fmt.Errorf("required environment variable %s is not set", key))
-			}
-			// Either blank for no value, or a missing required value, and we're collecting errors.
+		if configuredValue == "" && isValueRequired {
+			errors.Add(key, ErrMissingValue)
 			continue
 		}
 
@@ -255,23 +260,20 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *Co
 
 // getConfiguredValue reads the string value to use for the field. This is read from the keystore or
 // any default provided in the tag.
-func getConfiguredValue(tag reflect.StructTag, key string, opts *loadOptions) (string, error) {
-	// Get the default value
-	defaultValue := tag.Get("default")
-
+func getConfiguredValue(ctx context.Context, tag reflect.StructTag, key string, opts *loadOptions) (string, bool, error) {
 	// Get the environment variable value
-	envValue, err := opts.keyStore(key)
-	if err != nil {
-		// Consider a store error to be fatal
-		return "", err
+	envValue, present, err := opts.keyStore(ctx, key)
+	if present || err != nil {
+		return envValue, present, err
 	}
 
-	// Determine which value to use
-	value := envValue
-	if value == "" && defaultValue != "" {
-		value = defaultValue
+	// Get the default value
+	defaultValue, defaultPresent := tag.Lookup("default")
+	if defaultPresent {
+		return defaultValue, true, nil
 	}
-	return value, nil
+
+	return "", false, nil
 }
 
 // setField sets a field value based on its type
