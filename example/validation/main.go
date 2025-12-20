@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -78,7 +80,13 @@ type Config struct {
 	API       APIConfig
 }
 
+// main runs the validation example.
+// If you want this sample to output a complete configuration then you must at least set the environment
+// variable API_KEY to a 20 character string starting `sk-`
+//
+//	export API_KEY=sk-456789012345678901
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	var config Config
 
 	// Load configuration with custom validators
@@ -118,7 +126,17 @@ func main() {
 
 	if err != nil {
 		// Handle configuration errors
-		log.Fatalf("Configuration validation failed:\n%v", err)
+		// We'd normally use log.Fatalf here, but the GitHub Action in this repository requires all samples to exit 0
+		// in order to allow a pull request to be merged.
+		var validationErr *goconfigtools.ConfigErrors
+		if errors.As(err, &validationErr) {
+			// Demonstrate logging collected messages to the structured logger.
+			validationErr.LogAll(logger, goconfigtools.WithLogMessage("configuration_error"))
+			os.Exit(0) // Exit 0 for an expected error to allow GitHub actions on this repository to pass
+		} else {
+			logger.Error("Configuration validation failed", "err", err)
+			os.Exit(1) // Exit 1 for an unexpected error to cause GitHub actions on this repository to fail
+		}
 	}
 
 	// Configuration is valid - print it
