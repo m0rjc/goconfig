@@ -3,8 +3,6 @@ package goconfigtools
 import (
 	"fmt"
 	"reflect"
-	"strconv"
-	"time"
 )
 
 // Option is a functional option for configuring the Load function.
@@ -12,6 +10,8 @@ type Option func(*loadOptions)
 
 // loadOptions holds the configuration options for Load.
 type loadOptions struct {
+	// parsers allows the parser for a given key to be overridden
+	parsers map[string]Parser // key is fieldPath
 	// keyStore reads the values. Default to os.GetEnv()
 	keyStore KeyStore
 	// validatorFactories provide validators for a field
@@ -88,6 +88,13 @@ func WithValidator(path string, validator Validator) Option {
 	}
 }
 
+// WithParser registers a custom parser at a given path.
+func WithParser(path string, parser Parser) Option {
+	return func(opts *loadOptions) {
+		opts.addParser(path, parser)
+	}
+}
+
 // WithKeyStore replaces the environment variable keystore with an alternative.
 // Use this to read from other sources such as a database or properties file.
 func WithKeyStore(keyStore KeyStore) Option {
@@ -100,6 +107,7 @@ func WithKeyStore(keyStore KeyStore) Option {
 func newLoadOptions() *loadOptions {
 	return &loadOptions{
 		keyStore:           EnvironmentKeyStore,
+		parsers:            make(map[string]Parser),
 		validatorFactories: []ValidatorFactory{builtinValidatorFactory},
 		validators:         make(map[string][]Validator),
 	}
@@ -194,149 +202,88 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *Co
 			currentPath = fieldPath + "." + fieldType.Name
 		}
 
-		// Handle nested structs
-		// TODO: When we implement custom marshallers allow a marshaller to be registered against
-		//       a whole struct and take over here.
-		if field.Kind() == reflect.Struct && fieldType.Type != reflect.TypeOf(time.Duration(0)) {
-			if err := loadStruct(field, currentPath, opts, errors); err != nil {
-				return err
-			}
-			continue
-		}
-
 		// Get the key tag
 		key := fieldType.Tag.Get("key")
 		if key == "" {
+			// If it's a struct then recurse into it
+			if field.Kind() == reflect.Struct {
+				if err := loadStruct(field, currentPath, opts, errors); err != nil {
+					return err
+				}
+			}
 			// No key tag, skip this field
 			continue
 		}
 
-		// Get the default value
-		defaultValue := fieldType.Tag.Get("default")
-
-		// Check if field is required
-		required := fieldType.Tag.Get("required") == "true"
-
-		// Get the environment variable value
-		envValue, err := opts.keyStore(key)
+		configuredValue, err := getConfiguredValue(fieldType.Tag, key, opts)
 		if err != nil {
-			// Consider a store error to be fatal
-			return err
-		}
-
-		// Determine which value to use
-		value := envValue
-		if value == "" && defaultValue != "" {
-			value = defaultValue
-		}
-
-		// If still empty, check if it's required
-		if value == "" {
-			if required {
-				errors.Add(key, fmt.Errorf("required environment variable %s is not set", key))
-			}
-			// Not required and no value, or required but we're collecting errors - leave field unchanged
+			errors.Add(key, fmt.Errorf("error reading key %s: %w", key, err))
 			continue
 		}
 
-		// Parse min/max tags and register validators
-		if err := registerValidators(fieldType, currentPath, opts); err != nil {
+		// If empty, check if it's required
+		if configuredValue == "" {
+			required := fieldType.Tag.Get("required") == "true"
+			if required {
+				errors.Add(key, fmt.Errorf("required environment variable %s is not set", key))
+			}
+			// Either blank for no value, or a missing required value, and we're collecting errors.
+			continue
+		}
+
+		// Parse the configured value to produce a raw value
+		rawValue, err := parseValue(configuredValue, currentPath, field, opts)
+		if err != nil {
+			errors.Add(key, fmt.Errorf("error parsing value %s: %w", configuredValue, err))
+			continue
+		}
+
+		// Validate the raw value
+		ok, err := validate(rawValue, key, currentPath, fieldType, opts, errors)
+		if err != nil {
 			return err
 		}
 
-		// Set the field value based on its type (with validation)
-		setField(field, value, key, currentPath, opts, errors)
+		// Set the field value based on its type
+		if ok {
+			setField(field, rawValue, key, errors)
+		}
 	}
 
 	return nil
 }
 
-// setField sets a field value based on its type and runs validators.
-// Errors are collected in the errors parameter instead of being returned.
-func setField(field reflect.Value, value string, key string, fieldPath string, opts *loadOptions, errors *ConfigErrors) {
-	var typedValue any
+// getConfiguredValue reads the string value to use for the field. This is read from the keystore or
+// any default provided in the tag.
+func getConfiguredValue(tag reflect.StructTag, key string, opts *loadOptions) (string, error) {
+	// Get the default value
+	defaultValue := tag.Get("default")
 
-	// Parse and convert the value based on field type
-	switch field.Kind() {
-	case reflect.String:
-		typedValue = value
-
-	case reflect.Bool:
-		boolVal, err := strconv.ParseBool(value)
-		if err != nil {
-			errors.Add(key, fmt.Errorf("invalid bool value %q for %s: %w", value, key, err))
-			return
-		}
-		typedValue = boolVal
-
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		// Special handling for time.Duration
-		if field.Type() == reflect.TypeOf(time.Duration(0)) {
-			duration, err := time.ParseDuration(value)
-			if err != nil {
-				errors.Add(key, fmt.Errorf("invalid duration value %q for %s: %w", value, key, err))
-				return
-			}
-			typedValue = duration
-		} else {
-			intVal, err := strconv.ParseInt(value, 10, 64)
-			if err != nil {
-				errors.Add(key, fmt.Errorf("invalid int value %q for %s: %w", value, key, err))
-				return
-			}
-			typedValue = intVal
-		}
-
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		uintVal, err := strconv.ParseUint(value, 10, 64)
-		if err != nil {
-			errors.Add(key, fmt.Errorf("invalid uint value %q for %s: %w", value, key, err))
-			return
-		}
-		typedValue = uintVal
-
-	case reflect.Float32, reflect.Float64:
-		floatVal, err := strconv.ParseFloat(value, 64)
-		if err != nil {
-			errors.Add(key, fmt.Errorf("invalid float value %q for %s: %w", value, key, err))
-			return
-		}
-		typedValue = floatVal
-
-	default:
-		errors.Add(key, fmt.Errorf("unsupported field type: %s", field.Kind()))
-		return
+	// Get the environment variable value
+	envValue, err := opts.keyStore(key)
+	if err != nil {
+		// Consider a store error to be fatal
+		return "", err
 	}
 
-	// Run validators before setting the field
-	if validators, exists := opts.validators[fieldPath]; exists {
-		for _, validator := range validators {
-			if err := validator(typedValue); err != nil {
-				errors.Add(key, fmt.Errorf("invalid value for %s: %w", key, err))
-				return
-			}
-		}
+	// Determine which value to use
+	value := envValue
+	if value == "" && defaultValue != "" {
+		value = defaultValue
 	}
+	return value, nil
+}
 
+// setField sets a field value based on its type
+func setField(field reflect.Value, value any, key string, errors *ConfigErrors) {
 	// Set the field after validation passes
-	switch field.Kind() {
-	case reflect.String:
-		field.SetString(typedValue.(string))
-	case reflect.Bool:
-		field.SetBool(typedValue.(bool))
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-		if field.Type() == reflect.TypeOf(time.Duration(0)) {
-			field.SetInt(int64(typedValue.(time.Duration)))
-		} else {
-			field.SetInt(typedValue.(int64))
-		}
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		field.SetUint(typedValue.(uint64))
-	case reflect.Float32, reflect.Float64:
-		field.SetFloat(typedValue.(float64))
-	default:
-		// This should never happen as we already handled unsupported types above
-		panic(fmt.Sprintf("unsupported field type during set: %s", field.Kind()))
+	val := reflect.ValueOf(value)
+	fieldType := field.Type()
+
+	if val.Type().ConvertibleTo(fieldType) {
+		field.Set(val.Convert(fieldType))
+	} else {
+		errors.Add(key, fmt.Errorf("value of type %s cannot be converted to %s", val.Type(), fieldType))
 	}
 }
 
@@ -352,4 +299,11 @@ func (opts *loadOptions) addValidatorFactory(factory ValidatorFactory) {
 		opts.validatorFactories = make([]ValidatorFactory, 0, 1)
 	}
 	opts.validatorFactories = append(opts.validatorFactories, factory)
+}
+
+func (opts *loadOptions) addParser(path string, parser Parser) {
+	if opts.parsers == nil {
+		opts.parsers = make(map[string]Parser)
+	}
+	opts.parsers[path] = parser
 }
