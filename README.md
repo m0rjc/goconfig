@@ -255,7 +255,7 @@ type ModelParameters struct {
 }
 
 type Config struct {
-	value ModelParameters `key:"OPENAI_MODEL_PARAMS"`
+	Value ModelParameters `key:"OPENAI_MODEL_PARAMS"`
 }
 ```
 
@@ -266,7 +266,7 @@ type ModelParameters struct {
 }
 
 type Config struct {
-	value *ModelParameters `key:"OPENAI_MODEL_PARAMS"`
+	Value *ModelParameters `key:"OPENAI_MODEL_PARAMS"`
 }
 ```
 
