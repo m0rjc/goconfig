@@ -344,8 +344,8 @@ func TestLoad_WithValidator_RootField(t *testing.T) {
 				if err == nil {
 					t.Fatalf("Expected error containing %q, got nil", tt.errMsg)
 				}
-				if err.Error() != "invalid value for PORT: "+tt.errMsg {
-					t.Errorf("Expected error %q, got %q", "invalid value for PORT: "+tt.errMsg, err.Error())
+				if err.Error() != "PORT: "+tt.errMsg {
+					t.Errorf("Expected error %q, got %q", "PORT: "+tt.errMsg, err.Error())
 				}
 			} else {
 				if err != nil {
@@ -379,7 +379,7 @@ func TestLoad_WithValidator_NestedField(t *testing.T) {
 		t.Fatal("Expected error for IP address")
 	}
 
-	if err.Error() != "invalid value for DB_HOST: IP addresses not allowed" {
+	if err.Error() != "DB_HOST: IP addresses not allowed" {
 		t.Errorf("Unexpected error message: %v", err)
 	}
 }
@@ -435,7 +435,7 @@ func TestLoad_WithValidator_MultipleValidators(t *testing.T) {
 		}),
 	)
 
-	if err == nil || err.Error() != "invalid value for PORT: port below 1024" {
+	if err == nil || err.Error() != "PORT: port below 1024" {
 		t.Errorf("Expected first validator to fail, got %v", err)
 	}
 }
@@ -464,7 +464,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value below minimum")
 	}
-	if err.Error() != "invalid value for PORT: value 500 is below minimum 1024" {
+	if err.Error() != "PORT: value 500 is below minimum 1024" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
@@ -476,7 +476,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value above maximum")
 	}
-	if err.Error() != "invalid value for PORT: value 70000 exceeds maximum 65535" {
+	if err.Error() != "PORT: value 70000 exceeds maximum 65535" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -563,7 +563,7 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for non-multiple of 10")
 	}
-	if err.Error() != "invalid value for PORT: port must be multiple of 10" {
+	if err.Error() != "PORT: port must be multiple of 10" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
@@ -572,7 +572,7 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
 	err = Load(&cfg2)
-	if err == nil || err.Error() != "invalid value for PORT: value 500 is below minimum 1024" {
+	if err == nil || err.Error() != "PORT: value 500 is below minimum 1024" {
 		t.Errorf("Expected min validation to fail, got %v", err)
 	}
 }
@@ -678,7 +678,7 @@ func TestLoad_WithValidatorFactory(t *testing.T) {
 		t.Fatal("Expected error for invalid email")
 	}
 
-	if err.Error() != "invalid value for EMAIL: invalid email format" {
+	if err.Error() != "EMAIL: invalid email format" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -748,6 +748,184 @@ func TestLoad_WithValidatorFactory_MultipleFactories(t *testing.T) {
 	err = Load(&cfg3, WithValidatorFactory(emailFactory), WithValidatorFactory(alphanumFactory))
 	if err == nil {
 		t.Fatal("Expected error for invalid username")
+	}
+}
+
+// TestLoad_MultipleRuntimeErrors tests that multiple runtime errors are collected and reported together
+func TestLoad_MultipleRuntimeErrors(t *testing.T) {
+	type Config struct {
+		RequiredField string `key:"REQ" required:"true"`
+		BadInt        int    `key:"BAD_INT"`
+		OutOfRange    int    `key:"OUT_OF_RANGE" min:"10" max:"100"`
+	}
+
+	os.Clearenv()
+	os.Setenv("BAD_INT", "not-a-number")
+	os.Setenv("OUT_OF_RANGE", "500")
+
+	var cfg Config
+	err := Load(&cfg)
+
+	// Should return a ConfigErrors type
+	configErr, ok := err.(*ConfigErrors)
+	if !ok {
+		t.Fatalf("Expected *ConfigErrors, got %T", err)
+	}
+
+	if configErr.Len() != 3 {
+		t.Errorf("Expected 3 errors, got %d", configErr.Len())
+	}
+
+	// Check error message format
+	errMsg := err.Error()
+	if !contains(errMsg, "REQ") {
+		t.Error("Error should mention REQ")
+	}
+	if !contains(errMsg, "BAD_INT") {
+		t.Error("Error should mention BAD_INT")
+	}
+	if !contains(errMsg, "OUT_OF_RANGE") {
+		t.Error("Error should mention OUT_OF_RANGE")
+	}
+
+	// Verify error message contains expected substrings
+	if !contains(errMsg, "required environment variable") {
+		t.Error("Error should mention required environment variable")
+	}
+	if !contains(errMsg, "invalid int value") {
+		t.Error("Error should mention invalid int value")
+	}
+	if !contains(errMsg, "exceeds maximum") {
+		t.Error("Error should mention exceeds maximum")
+	}
+}
+
+// TestLoad_NestedStructWithMultipleErrors tests error collection in nested structs
+func TestLoad_NestedStructWithMultipleErrors(t *testing.T) {
+	type Database struct {
+		Port int    `key:"DB_PORT" min:"1024" max:"65535"`
+		Host string `key:"DB_HOST" required:"true"`
+	}
+
+	type Config struct {
+		Database Database
+		APIKey   string `key:"API_KEY" required:"true"`
+	}
+
+	os.Clearenv()
+	os.Setenv("DB_PORT", "500") // Below minimum
+
+	var cfg Config
+	err := Load(&cfg)
+
+	configErr, ok := err.(*ConfigErrors)
+	if !ok {
+		t.Fatalf("Expected *ConfigErrors, got %T", err)
+	}
+
+	if configErr.Len() != 3 {
+		t.Errorf("Expected 3 errors (DB_PORT, DB_HOST, API_KEY), got %d", configErr.Len())
+	}
+
+	errMsg := err.Error()
+	if !contains(errMsg, "DB_PORT") {
+		t.Error("Error should mention DB_PORT")
+	}
+	if !contains(errMsg, "DB_HOST") {
+		t.Error("Error should mention DB_HOST")
+	}
+	if !contains(errMsg, "API_KEY") {
+		t.Error("Error should mention API_KEY")
+	}
+}
+
+// TestConfigErrors_Unwrap tests the Unwrap method for error inspection
+func TestConfigErrors_Unwrap(t *testing.T) {
+	type Config struct {
+		Field1 string `key:"FIELD1" required:"true"`
+		Field2 string `key:"FIELD2" required:"true"`
+	}
+
+	os.Clearenv()
+
+	var cfg Config
+	err := Load(&cfg)
+
+	configErr, ok := err.(*ConfigErrors)
+	if !ok {
+		t.Fatalf("Expected *ConfigErrors, got %T", err)
+	}
+
+	unwrapped := configErr.Unwrap()
+	if len(unwrapped) != 2 {
+		t.Errorf("Expected 2 unwrapped errors, got %d", len(unwrapped))
+	}
+
+	// Verify the unwrapped errors are not nil
+	for i, e := range unwrapped {
+		if e == nil {
+			t.Errorf("Unwrapped error %d should not be nil", i)
+		}
+	}
+}
+
+// TestLoad_ConfigErrorsStillFailFast tests that configuration errors (bad tags, invalid validators) still fail fast
+func TestLoad_ConfigErrorsStillFailFast(t *testing.T) {
+	type BadConfig struct {
+		Port int `key:"PORT" min:"not-a-number"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT", "8080")
+
+	var cfg BadConfig
+	err := Load(&cfg)
+
+	// Should get a regular error, not ConfigErrors, since this is a configuration error
+	if err == nil {
+		t.Fatal("Expected error for invalid min tag")
+	}
+
+	_, ok := err.(*ConfigErrors)
+	if ok {
+		t.Error("Configuration errors should not be wrapped in ConfigErrors, they should fail fast")
+	}
+
+	// Verify it's a configuration error about the invalid tag
+	if !contains(err.Error(), "invalid min tag") {
+		t.Errorf("Expected configuration error about invalid min tag, got: %v", err)
+	}
+}
+
+// TestLoad_MultipleValidationErrors tests that all validators run even when some fail
+func TestLoad_MultipleValidationErrors(t *testing.T) {
+	type Config struct {
+		Port1 int `key:"PORT1" min:"1024" max:"65535"`
+		Port2 int `key:"PORT2" min:"1024" max:"65535"`
+		Port3 int `key:"PORT3" min:"1024" max:"65535"`
+	}
+
+	os.Clearenv()
+	os.Setenv("PORT1", "500")   // Below minimum
+	os.Setenv("PORT2", "70000") // Above maximum
+	os.Setenv("PORT3", "abc")   // Invalid type
+
+	var cfg Config
+	err := Load(&cfg)
+
+	configErr, ok := err.(*ConfigErrors)
+	if !ok {
+		t.Fatalf("Expected *ConfigErrors, got %T", err)
+	}
+
+	if configErr.Len() != 3 {
+		t.Errorf("Expected 3 errors, got %d: %v", configErr.Len(), err)
+	}
+
+	errMsg := err.Error()
+	// All three errors should be reported
+	if !contains(errMsg, "PORT1") || !contains(errMsg, "PORT2") || !contains(errMsg, "PORT3") {
+		t.Errorf("All three port errors should be reported, got: %v", errMsg)
 	}
 }
 
