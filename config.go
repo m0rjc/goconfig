@@ -5,8 +5,63 @@ import (
 	"os"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
+
+// ConfigErrors collects multiple runtime configuration errors.
+// It maintains the order errors were encountered and provides formatted output.
+type ConfigErrors struct {
+	errors []configError
+}
+
+// configError represents a single configuration error for a specific environment variable.
+type configError struct {
+	key string // Environment variable name (e.g., "DB_PORT", "API_KEY")
+	err error  // The underlying error
+}
+
+// Error implements the error interface.
+// It formats all collected errors as: "KEY1: error1; KEY2: error2"
+func (ce *ConfigErrors) Error() string {
+	if len(ce.errors) == 0 {
+		return ""
+	}
+
+	var parts []string
+	for _, e := range ce.errors {
+		msg := e.err.Error()
+		// Strip "invalid value for KEY: " prefix to avoid duplication
+		prefix := "invalid value for " + e.key + ": "
+		msg = strings.TrimPrefix(msg, prefix)
+		parts = append(parts, e.key+": "+msg)
+	}
+	return strings.Join(parts, "; ")
+}
+
+// Add adds a new error for the given environment variable.
+func (ce *ConfigErrors) Add(key string, err error) {
+	ce.errors = append(ce.errors, configError{key: key, err: err})
+}
+
+// HasErrors returns true if any errors were collected.
+func (ce *ConfigErrors) HasErrors() bool {
+	return len(ce.errors) > 0
+}
+
+// Len returns the number of errors collected.
+func (ce *ConfigErrors) Len() int {
+	return len(ce.errors)
+}
+
+// Unwrap returns all underlying errors for Go 1.20+ error inspection.
+func (ce *ConfigErrors) Unwrap() []error {
+	result := make([]error, len(ce.errors))
+	for i, e := range ce.errors {
+		result[i] = e.err
+	}
+	return result
+}
 
 // Option is a functional option for configuring the Load function.
 type Option func(*loadOptions)
@@ -153,12 +208,20 @@ func Load(config interface{}, options ...Option) error {
 	opts := newLoadOptions()
 	opts.applyOptions(options)
 
-	return loadStruct(v, "", opts)
+	errors := &ConfigErrors{errors: make([]configError, 0)}
+	if err := loadStruct(v, "", opts, errors); err != nil {
+		return err // configuration error, fail-fast
+	}
+
+	if errors.HasErrors() {
+		return errors
+	}
+	return nil
 }
 
 // loadStruct recursively loads configuration values into a struct.
 // fieldPath tracks the current position in the struct hierarchy for validators.
-func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
+func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions, errors *ConfigErrors) error {
 	t := v.Type()
 
 	for i := 0; i < v.NumField(); i++ {
@@ -180,7 +243,7 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		// TODO: When we implement custom marshallers allow a marshaller to be registered against
 		//       a whole struct and take over here.
 		if field.Kind() == reflect.Struct && fieldType.Type != reflect.TypeOf(time.Duration(0)) {
-			if err := loadStruct(field, currentPath, opts); err != nil {
+			if err := loadStruct(field, currentPath, opts, errors); err != nil {
 				return err
 			}
 			continue
@@ -211,9 +274,9 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		// If still empty, check if it's required
 		if value == "" {
 			if required {
-				return fmt.Errorf("required environment variable %s is not set", key)
+				errors.Add(key, fmt.Errorf("required environment variable %s is not set", key))
 			}
-			// Not required and no value, leave field unchanged (preserves pre-initialized values)
+			// Not required and no value, or required but we're collecting errors - leave field unchanged
 			continue
 		}
 
@@ -223,16 +286,15 @@ func loadStruct(v reflect.Value, fieldPath string, opts *loadOptions) error {
 		}
 
 		// Set the field value based on its type (with validation)
-		if err := setField(field, value, key, currentPath, opts); err != nil {
-			return err
-		}
+		setField(field, value, key, currentPath, opts, errors)
 	}
 
 	return nil
 }
 
 // setField sets a field value based on its type and runs validators.
-func setField(field reflect.Value, value string, key string, fieldPath string, opts *loadOptions) error {
+// Errors are collected in the errors parameter instead of being returned.
+func setField(field reflect.Value, value string, key string, fieldPath string, opts *loadOptions, errors *ConfigErrors) {
 	var typedValue any
 
 	// Parse and convert the value based on field type
@@ -243,7 +305,8 @@ func setField(field reflect.Value, value string, key string, fieldPath string, o
 	case reflect.Bool:
 		boolVal, err := strconv.ParseBool(value)
 		if err != nil {
-			return fmt.Errorf("invalid bool value %q for %s: %w", value, key, err)
+			errors.Add(key, fmt.Errorf("invalid bool value %q for %s: %w", value, key, err))
+			return
 		}
 		typedValue = boolVal
 
@@ -252,13 +315,15 @@ func setField(field reflect.Value, value string, key string, fieldPath string, o
 		if field.Type() == reflect.TypeOf(time.Duration(0)) {
 			duration, err := time.ParseDuration(value)
 			if err != nil {
-				return fmt.Errorf("invalid duration value %q for %s: %w", value, key, err)
+				errors.Add(key, fmt.Errorf("invalid duration value %q for %s: %w", value, key, err))
+				return
 			}
 			typedValue = duration
 		} else {
 			intVal, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
-				return fmt.Errorf("invalid int value %q for %s: %w", value, key, err)
+				errors.Add(key, fmt.Errorf("invalid int value %q for %s: %w", value, key, err))
+				return
 			}
 			typedValue = intVal
 		}
@@ -266,26 +331,30 @@ func setField(field reflect.Value, value string, key string, fieldPath string, o
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 		uintVal, err := strconv.ParseUint(value, 10, 64)
 		if err != nil {
-			return fmt.Errorf("invalid uint value %q for %s: %w", value, key, err)
+			errors.Add(key, fmt.Errorf("invalid uint value %q for %s: %w", value, key, err))
+			return
 		}
 		typedValue = uintVal
 
 	case reflect.Float32, reflect.Float64:
 		floatVal, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return fmt.Errorf("invalid float value %q for %s: %w", value, key, err)
+			errors.Add(key, fmt.Errorf("invalid float value %q for %s: %w", value, key, err))
+			return
 		}
 		typedValue = floatVal
 
 	default:
-		return fmt.Errorf("unsupported field type: %s", field.Kind())
+		errors.Add(key, fmt.Errorf("unsupported field type: %s", field.Kind()))
+		return
 	}
 
 	// Run validators before setting the field
 	if validators, exists := opts.validators[fieldPath]; exists {
 		for _, validator := range validators {
 			if err := validator(typedValue); err != nil {
-				return fmt.Errorf("invalid value for %s: %w", key, err)
+				errors.Add(key, fmt.Errorf("invalid value for %s: %w", key, err))
+				return
 			}
 		}
 	}
@@ -307,11 +376,9 @@ func setField(field reflect.Value, value string, key string, fieldPath string, o
 	case reflect.Float32, reflect.Float64:
 		field.SetFloat(typedValue.(float64))
 	default:
-		// My IDE warns me that this would be iota fields. We'd not expect an iota field here.
-		return fmt.Errorf("unsupported field type: %s", field.Kind())
+		// This should never happen as we already handled unsupported types above
+		panic(fmt.Sprintf("unsupported field type during set: %s", field.Kind()))
 	}
-
-	return nil
 }
 
 func (opts *loadOptions) addValidator(fieldPath string, validator Validator) {
