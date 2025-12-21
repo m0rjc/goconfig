@@ -125,18 +125,18 @@ func main() {
 	)
 
 	if err != nil {
-		// Handle configuration errors
-		// We'd normally use log.Fatalf here, but the GitHub Action in this repository requires all samples to exit 0
-		// in order to allow a pull request to be merged.
+		// goconfig provides support for structured logging of errors. Collected errors are logged individually.
+		// This allows all errors in configuration to be seen at once, rather than a whack-a-mole approach seeing
+		// them one by one.
+		goconfig.LogError(logger, err, goconfig.WithLogMessage("configuration_error"))
+
+		// An error would normally be fatal. This repository has a GitHub Action which verifies that the
+		// sample code runs. We must exit(0) for an expected error, but will exit(1) for any other error.
 		var validationErr *goconfig.ConfigErrors
 		if errors.As(err, &validationErr) {
-			// Demonstrate logging collected messages to the structured logger.
-			validationErr.LogAll(logger, goconfig.WithLogMessage("configuration_error"))
-			os.Exit(0) // Exit 0 for an expected error to allow GitHub actions on this repository to pass
-		} else {
-			logger.Error("Configuration validation failed", "err", err)
-			os.Exit(1) // Exit 1 for an unexpected error to cause GitHub actions on this repository to fail
+			os.Exit(0)
 		}
+		os.Exit(1)
 	}
 
 	// Configuration is valid - print it
