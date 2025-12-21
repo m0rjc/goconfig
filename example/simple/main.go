@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/m0rjc/goconfigtools"
+	"github.com/m0rjc/goconfig"
 )
 
 // WebhookConfig holds webhook-related configuration
@@ -32,7 +32,7 @@ func main() {
 	var config Config
 
 	// Load configuration from environment variables
-	if err := goconfigtools.Load(context.Background(), &config); err != nil {
+	if err := goconfig.Load(context.Background(), &config); err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
 

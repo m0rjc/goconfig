@@ -1,12 +1,12 @@
-# goconfigtools Documentation
+# goconfig Documentation
 
-Comprehensive guides for using goconfigtools.
+Comprehensive guides for using goconfig.
 
 ## Quick Links
 
 - [Main README](../README.md) - Quick start and installation
 - [Examples](../example) - Working code examples
-- [API Documentation](https://pkg.go.dev/github.com/m0rjc/goconfigtools) - Generated from code
+- [API Documentation](https://pkg.go.dev/github.com/m0rjc/goconfig) - Generated from code
 
 ## Documentation Guides
 
@@ -55,7 +55,7 @@ Work with JSON configuration values from environment variables.
 ---
 
 ### 🔧 [Advanced Features](advanced.md)
-Extend goconfigtools with custom behavior.
+Extend goconfig with custom behavior.
 
 **Topics covered:**
 - Custom parsers for specialized types
@@ -95,10 +95,10 @@ Extend goconfigtools with custom behavior.
 
 ```go
 // Load with options
-err := goconfigtools.Load(context.Background(), &config,
-    goconfigtools.WithKeyStore(customStore),
-    goconfigtools.WithParser("Field", parserFunc),
-    goconfigtools.WithValidator("Field", validatorFunc),
+err := goconfig.Load(context.Background(), &config,
+    goconfig.WithKeyStore(customStore),
+    goconfig.WithParser("Field", parserFunc),
+    goconfig.WithValidator("Field", validatorFunc),
 )
 ```
 
@@ -113,7 +113,7 @@ type Config struct {
 }
 
 var cfg Config
-err := goconfigtools.Load(context.Background(), &cfg)
+err := goconfig.Load(context.Background(), &cfg)
 ```
 
 See: [simple example](../example/simple)
@@ -127,7 +127,7 @@ type Config struct {
 }
 
 var cfg Config
-err := goconfigtools.Load(context.Background(), &cfg)
+err := goconfig.Load(context.Background(), &cfg)
 ```
 
 See: [validation example](../example/validation), [validation.md](validation.md)
@@ -135,8 +135,8 @@ See: [validation example](../example/validation), [validation.md](validation.md)
 ### With Custom Validators
 
 ```go
-err := goconfigtools.Load(context.Background(), &cfg,
-    goconfigtools.WithValidator("APIKey", func(value any) error {
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithValidator("APIKey", func(value any) error {
         key := value.(string)
         if !strings.HasPrefix(key, "sk-") {
             return fmt.Errorf("API key must start with 'sk-'")
@@ -170,13 +170,13 @@ See: [json.md](json.md)
 ### Custom Key Store
 
 ```go
-store := goconfigtools.CompositeStore(
-    goconfigtools.EnvironmentKeyStore,
+store := goconfig.CompositeStore(
+    goconfig.EnvironmentKeyStore,
     fileKeyStore("/etc/myapp/config"),
 )
 
-err := goconfigtools.Load(context.Background(), &cfg,
-    goconfigtools.WithKeyStore(store),
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithKeyStore(store),
 )
 ```
 
@@ -214,8 +214,8 @@ func TestMyApp(t *testing.T) {
     }
 
     var cfg Config
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(mapKeyStore(testConfig)),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(mapKeyStore(testConfig)),
     )
 
     if err != nil {
@@ -229,15 +229,15 @@ See: [advanced.md](advanced.md#in-memory-key-store-for-testing)
 ## Error Handling
 
 ```go
-err := goconfigtools.Load(context.Background(), &config)
+err := goconfig.Load(context.Background(), &config)
 if err != nil {
     // Check for specific errors
-    if errors.Is(err, goconfigtools.ErrMissingConfigKey) {
+    if errors.Is(err, goconfig.ErrMissingConfigKey) {
         log.Fatal("Missing required environment variable")
     }
 
     // Handle multiple errors
-    var configErrs *goconfigtools.ConfigErrors
+    var configErrs *goconfig.ConfigErrors
     if errors.As(err, &configErrs) {
         for _, e := range configErrs.Unwrap() {
             log.Printf("Config error: %v", e)
@@ -252,9 +252,9 @@ See: [defaulting.md](defaulting.md#sentinel-errors), [advanced.md](advanced.md#e
 
 ## Getting Help
 
-- **Questions?** Open an issue on [GitHub](https://github.com/m0rjc/goconfigtools/issues)
-- **Found a bug?** Report it on [GitHub Issues](https://github.com/m0rjc/goconfigtools/issues)
-- **Want a feature?** Request it on [GitHub Discussions](https://github.com/m0rjc/goconfigtools/discussions)
+- **Questions?** Open an issue on [GitHub](https://github.com/m0rjc/goconfig/issues)
+- **Found a bug?** Report it on [GitHub Issues](https://github.com/m0rjc/goconfig/issues)
+- **Want a feature?** Request it on [GitHub Discussions](https://github.com/m0rjc/goconfig/discussions)
 
 ## Contributing
 

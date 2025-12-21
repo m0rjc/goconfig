@@ -1,6 +1,6 @@
 # Validation
 
-Built-in validation helps catch configuration errors early with clear error messages. This guide covers all validation features available in goconfigtools.
+Built-in validation helps catch configuration errors early with clear error messages. This guide covers all validation features available in goconfig.
 
 ## Table of Contents
 
@@ -28,7 +28,7 @@ type ServerConfig struct {
 
 func main() {
     var cfg ServerConfig
-    if err := goconfigtools.Load(&cfg); err != nil {
+    if err := goconfig.Load(&cfg); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
     // Port is guaranteed to be between 1024 and 65535
@@ -107,9 +107,9 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(&cfg,
+    err := goconfig.Load(&cfg,
         // Validate API key format
-        goconfigtools.WithValidator("APIKey", func(value any) error {
+        goconfig.WithValidator("APIKey", func(value any) error {
             key := value.(string)
             if !strings.HasPrefix(key, "sk-") {
                 return fmt.Errorf("API key must start with 'sk-'")
@@ -121,7 +121,7 @@ func main() {
         }),
 
         // Validate host is not an IP address
-        goconfigtools.WithValidator("Host", func(value any) error {
+        goconfig.WithValidator("Host", func(value any) error {
             host := value.(string)
             if net.ParseIP(host) != nil {
                 return fmt.Errorf("host must be a hostname, not an IP address")
@@ -130,7 +130,7 @@ func main() {
         }),
 
         // Additional port validation
-        goconfigtools.WithValidator("Port", func(value any) error {
+        goconfig.WithValidator("Port", func(value any) error {
             port := value.(int64)
             if port%10 != 0 {
                 return fmt.Errorf("port must be a multiple of 10")
@@ -178,9 +178,9 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(&cfg,
+    err := goconfig.Load(&cfg,
         // Validate database host
-        goconfigtools.WithValidator("Database.Host", func(value any) error {
+        goconfig.WithValidator("Database.Host", func(value any) error {
             host := value.(string)
             if host == "localhost" {
                 return fmt.Errorf("production environments must use a remote database")
@@ -189,7 +189,7 @@ func main() {
         }),
 
         // Validate API endpoint uses HTTPS
-        goconfigtools.WithValidator("API.Endpoint", func(value any) error {
+        goconfig.WithValidator("API.Endpoint", func(value any) error {
             endpoint := value.(string)
             if !strings.HasPrefix(endpoint, "https://") {
                 return fmt.Errorf("API endpoint must use HTTPS")
@@ -216,9 +216,9 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(&cfg,
+    err := goconfig.Load(&cfg,
         // This runs AFTER min/max validation from the tag
-        goconfigtools.WithValidator("Port", func(value any) error {
+        goconfig.WithValidator("Port", func(value any) error {
             port := value.(int64)
             if port%10 != 0 {
                 return fmt.Errorf("port must be a multiple of 10")
@@ -246,16 +246,16 @@ Validation errors provide clear, actionable messages:
 ### Min/Max Validation Errors
 
 ```
-invalid value for PORT: value 500 is below minimum 1024
-invalid value for PORT: value 70000 is above maximum 65535
-invalid value for TIMEOUT: value 100ms is below minimum 1s
-invalid value for TIMEOUT: value 10m is above maximum 5m
+invalid value for PORT: below minimum 1024
+invalid value for PORT: exceeds maximum 65535
+invalid value for TIMEOUT: below minimum 1s
+invalid value for TIMEOUT: exceeds maximum 5m
 ```
 
 ### Pattern Validation Errors
 
 ```
-invalid value for USERNAME: value "user@host" does not match pattern "^[a-zA-Z0-9_]+$"
+invalid value for USERNAME: does not match pattern "^[a-zA-Z0-9_]+$"
 ```
 
 ### Custom Validation Errors
@@ -273,8 +273,8 @@ When multiple fields have validation errors, they are all collected and reported
 
 ```
 configuration errors:
-  - invalid value for PORT: value 500 is below minimum 1024
-  - invalid value for USERNAME: value "user@host" does not match pattern "^[a-zA-Z0-9_]+$"
+  - invalid value for PORT: below minimum 1024
+  - invalid value for USERNAME: does not match pattern "^[a-zA-Z0-9_]+$"
   - invalid value for API.Endpoint: API endpoint must use HTTPS
 ```
 

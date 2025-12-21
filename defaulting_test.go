@@ -1,4 +1,4 @@
-package goconfigtools
+package goconfig
 
 // This test file corresponds to the Defaulting section in README.md
 

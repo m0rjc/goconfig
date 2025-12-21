@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/m0rjc/goconfigtools"
+	"github.com/m0rjc/goconfig"
 )
 
 // ServerConfig demonstrates validation for server settings
@@ -90,9 +90,9 @@ func main() {
 	var config Config
 
 	// Load configuration with custom validators
-	err := goconfigtools.Load(context.Background(), &config,
+	err := goconfig.Load(context.Background(), &config,
 		// Validate API key format (must start with "sk-" and be at least 20 chars)
-		goconfigtools.WithValidator("API.APIKey", func(value any) error {
+		goconfig.WithValidator("API.APIKey", func(value any) error {
 			key := value.(string)
 			if !strings.HasPrefix(key, "sk-") {
 				return fmt.Errorf("API key must start with 'sk-'")
@@ -104,7 +104,7 @@ func main() {
 		}),
 
 		// Validate API endpoint is a valid URL with https
-		goconfigtools.WithValidator("API.Endpoint", func(value any) error {
+		goconfig.WithValidator("API.Endpoint", func(value any) error {
 			endpoint := value.(string)
 			if !strings.HasPrefix(endpoint, "https://") {
 				return fmt.Errorf("API endpoint must use HTTPS")
@@ -113,7 +113,7 @@ func main() {
 		}),
 
 		// Validate database host is not a loopback address in production
-		goconfigtools.WithValidator("Database.Host", func(value any) error {
+		goconfig.WithValidator("Database.Host", func(value any) error {
 			host := value.(string)
 			ip := net.ParseIP(host)
 			if ip != nil && ip.IsLoopback() {
@@ -125,18 +125,18 @@ func main() {
 	)
 
 	if err != nil {
-		// Handle configuration errors
-		// We'd normally use log.Fatalf here, but the GitHub Action in this repository requires all samples to exit 0
-		// in order to allow a pull request to be merged.
-		var validationErr *goconfigtools.ConfigErrors
+		// goconfig provides support for structured logging of errors. Collected errors are logged individually.
+		// This allows all errors in configuration to be seen at once, rather than a whack-a-mole approach seeing
+		// them one by one.
+		goconfig.LogError(logger, err, goconfig.WithLogMessage("configuration_error"))
+
+		// An error would normally be fatal. This repository has a GitHub Action which verifies that the
+		// sample code runs. We must exit(0) for an expected error, but will exit(1) for any other error.
+		var validationErr *goconfig.ConfigErrors
 		if errors.As(err, &validationErr) {
-			// Demonstrate logging collected messages to the structured logger.
-			validationErr.LogAll(logger, goconfigtools.WithLogMessage("configuration_error"))
-			os.Exit(0) // Exit 0 for an expected error to allow GitHub actions on this repository to pass
-		} else {
-			logger.Error("Configuration validation failed", "err", err)
-			os.Exit(1) // Exit 1 for an unexpected error to cause GitHub actions on this repository to fail
+			os.Exit(0)
 		}
+		os.Exit(1)
 	}
 
 	// Configuration is valid - print it

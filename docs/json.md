@@ -1,6 +1,6 @@
 # JSON Deserialization
 
-goconfigtools can deserialize JSON strings from environment variables into Go structs and maps.
+goconfig can deserialize JSON strings from environment variables into Go structs and maps.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ func main() {
     // Set in environment:
     // export OPENAI_MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -87,7 +87,7 @@ func main() {
     // Set in environment:
     // export OPENAI_MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000,"top_p":0.9,"model":"gpt-4"}'
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -131,7 +131,7 @@ type Config struct {
 func main() {
     var config Config
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -158,7 +158,7 @@ type Config struct {
 func main() {
     var config Config
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -206,7 +206,7 @@ func main() {
     //   "replicas": ["replica1.example.com", "replica2.example.com"]
     // }'
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -237,7 +237,7 @@ type Config struct {
 JSON deserialization errors are reported with context:
 
 ```go
-err := goconfigtools.Load(&config)
+err := goconfig.Load(&config)
 if err != nil {
     // Error will indicate which field had invalid JSON
     // Example: "invalid value for OPENAI_MODEL_PARAMS: invalid character '}' looking for beginning of value"
@@ -279,7 +279,7 @@ func main() {
 
     // export FEATURE_FLAGS='{"enable_beta_features":true,"allowed_users":["alice","bob"],"rollout_percentage":25}'
 
-    if err := goconfigtools.Load(&config); err != nil {
+    if err := goconfig.Load(&config); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 
@@ -293,7 +293,7 @@ func main() {
 
 ## Combining with Other Features
 
-JSON fields work with all other goconfigtools features:
+JSON fields work with all other goconfig features:
 
 ```go
 type Config struct {

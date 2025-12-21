@@ -1,6 +1,6 @@
 # Validation Example
 
-This example demonstrates comprehensive validation features in goconfigtools, including:
+This example demonstrates comprehensive validation features in goconfig, including:
 
 - **Min/Max validation** for integers, floats, and durations
 - **Pattern validation** for strings using regular expressions
@@ -84,7 +84,7 @@ Hostname string `key:"HOSTNAME" default:"localhost" pattern:"^[a-zA-Z0-9.-]+$"`
 
 ### Custom Validators
 ```go
-goconfigtools.WithValidator("API.APIKey", func(value any) error {
+goconfig.WithValidator("API.APIKey", func(value any) error {
     key := value.(string)
     if !strings.HasPrefix(key, "sk-") {
         return fmt.Errorf("API key must start with 'sk-'")
@@ -96,7 +96,7 @@ goconfigtools.WithValidator("API.APIKey", func(value any) error {
 ### Nested Field Validation
 ```go
 // Validates the Host field within the Database struct
-goconfigtools.WithValidator("Database.Host", func(value any) error {
+goconfig.WithValidator("Database.Host", func(value any) error {
     // validation logic
     return nil
 })
