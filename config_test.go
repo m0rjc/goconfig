@@ -466,7 +466,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value below minimum")
 	}
-	if err.Error() != "PORT: value 500 is below minimum 1024" {
+	if err.Error() != "PORT: below minimum 1024" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
@@ -478,7 +478,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value above maximum")
 	}
-	if err.Error() != "PORT: value 70000 exceeds maximum 65535" {
+	if err.Error() != "PORT: exceeds maximum 65535" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -574,7 +574,7 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
 	err = Load(context.Background(), &cfg2)
-	if err == nil || err.Error() != "PORT: value 500 is below minimum 1024" {
+	if err == nil || err.Error() != "PORT: below minimum 1024" {
 		t.Errorf("Expected min validation to fail, got %v", err)
 	}
 }

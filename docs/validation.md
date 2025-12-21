@@ -246,16 +246,16 @@ Validation errors provide clear, actionable messages:
 ### Min/Max Validation Errors
 
 ```
-invalid value for PORT: value 500 is below minimum 1024
-invalid value for PORT: value 70000 is above maximum 65535
-invalid value for TIMEOUT: value 100ms is below minimum 1s
-invalid value for TIMEOUT: value 10m is above maximum 5m
+invalid value for PORT: below minimum 1024
+invalid value for PORT: exceeds maximum 65535
+invalid value for TIMEOUT: below minimum 1s
+invalid value for TIMEOUT: exceeds maximum 5m
 ```
 
 ### Pattern Validation Errors
 
 ```
-invalid value for USERNAME: value "user@host" does not match pattern "^[a-zA-Z0-9_]+$"
+invalid value for USERNAME: does not match pattern "^[a-zA-Z0-9_]+$"
 ```
 
 ### Custom Validation Errors
@@ -273,8 +273,8 @@ When multiple fields have validation errors, they are all collected and reported
 
 ```
 configuration errors:
-  - invalid value for PORT: value 500 is below minimum 1024
-  - invalid value for USERNAME: value "user@host" does not match pattern "^[a-zA-Z0-9_]+$"
+  - invalid value for PORT: below minimum 1024
+  - invalid value for USERNAME: does not match pattern "^[a-zA-Z0-9_]+$"
   - invalid value for API.Endpoint: API endpoint must use HTTPS
 ```
 

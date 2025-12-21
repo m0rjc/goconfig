@@ -110,7 +110,7 @@ type ServerConfig struct {
 
 Validation errors provide clear messages:
 ```
-invalid value for PORT: value 500 is below minimum 1024
+invalid value for PORT: below minimum 1024
 ```
 
 ### Custom Validators

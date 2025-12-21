@@ -36,7 +36,7 @@ func TestCreateMinValidator_Int(t *testing.T) {
 	}{
 		{"above minimum", int64(2000), false, ""},
 		{"at minimum", int64(1024), false, ""},
-		{"below minimum", int64(500), true, "value 500 is below minimum 1024"},
+		{"below minimum", int64(500), true, "below minimum 1024"},
 	}
 
 	for _, tt := range tests {
@@ -73,7 +73,7 @@ func TestCreateMinValidator_Uint(t *testing.T) {
 	}{
 		{"above minimum", uint64(1000), false, ""},
 		{"at minimum", uint64(512), false, ""},
-		{"below minimum", uint64(100), true, "value 100 is below minimum 512"},
+		{"below minimum", uint64(100), true, "below minimum 512"},
 	}
 
 	for _, tt := range tests {
@@ -110,7 +110,7 @@ func TestCreateMinValidator_Float(t *testing.T) {
 	}{
 		{"above minimum", 0.75, false, ""},
 		{"at minimum", 0.0, false, ""},
-		{"below minimum", -0.5, true, "value -0.500000 is below minimum 0.000000"},
+		{"below minimum", -0.5, true, "below minimum 0.000000"},
 	}
 
 	for _, tt := range tests {
@@ -180,7 +180,7 @@ func TestCreateMaxValidator_Int(t *testing.T) {
 	}{
 		{"below maximum", int64(8080), false, ""},
 		{"at maximum", int64(65535), false, ""},
-		{"above maximum", int64(70000), true, "value 70000 exceeds maximum 65535"},
+		{"above maximum", int64(70000), true, "exceeds maximum 65535"},
 	}
 
 	for _, tt := range tests {
@@ -217,7 +217,7 @@ func TestCreateMaxValidator_Uint(t *testing.T) {
 	}{
 		{"below maximum", uint64(1024), false, ""},
 		{"at maximum", uint64(4096), false, ""},
-		{"above maximum", uint64(5000), true, "value 5000 exceeds maximum 4096"},
+		{"above maximum", uint64(5000), true, "exceeds maximum 4096"},
 	}
 
 	for _, tt := range tests {
@@ -254,7 +254,7 @@ func TestCreateMaxValidator_Float(t *testing.T) {
 	}{
 		{"below maximum", 0.75, false, ""},
 		{"at maximum", 1.0, false, ""},
-		{"above maximum", 1.5, true, "value 1.500000 exceeds maximum 1.000000"},
+		{"above maximum", 1.5, true, "exceeds maximum 1.000000"},
 	}
 
 	for _, tt := range tests {
@@ -324,9 +324,9 @@ func TestCreatePatternValidator_SimplePattern(t *testing.T) {
 	}{
 		{"valid alphanumeric", "user123", false, ""},
 		{"valid with underscore", "user_name", false, ""},
-		{"invalid with space", "user name", true, "value user name does not match pattern ^[a-zA-Z0-9_]+$"},
-		{"invalid with dash", "user-name", true, "value user-name does not match pattern ^[a-zA-Z0-9_]+$"},
-		{"invalid with special char", "user@name", true, "value user@name does not match pattern ^[a-zA-Z0-9_]+$"},
+		{"invalid with space", "user name", true, "does not match pattern ^[a-zA-Z0-9_]+$"},
+		{"invalid with dash", "user-name", true, "does not match pattern ^[a-zA-Z0-9_]+$"},
+		{"invalid with special char", "user@name", true, "does not match pattern ^[a-zA-Z0-9_]+$"},
 	}
 
 	for _, tt := range tests {
@@ -714,7 +714,7 @@ func TestCreateMinDurationValidator(t *testing.T) {
 	}{
 		{"above minimum", 1 * time.Minute, false, ""},
 		{"at minimum", 30 * time.Second, false, ""},
-		{"below minimum", 10 * time.Second, true, "value 10s is below minimum 30s"},
+		{"below minimum", 10 * time.Second, true, "below minimum 30s"},
 	}
 
 	for _, tt := range tests {
@@ -759,7 +759,7 @@ func TestCreateMaxDurationValidator(t *testing.T) {
 	}{
 		{"below maximum", 2 * time.Minute, false, ""},
 		{"at maximum", 5 * time.Minute, false, ""},
-		{"above maximum", 10 * time.Minute, true, "value 10m0s exceeds maximum 5m0s"},
+		{"above maximum", 10 * time.Minute, true, "exceeds maximum 5m0s"},
 	}
 
 	for _, tt := range tests {

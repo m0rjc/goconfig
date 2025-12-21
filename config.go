@@ -239,7 +239,7 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 		// Parse the configured value to produce a raw value
 		rawValue, err := parseValue(configuredValue, currentPath, field, opts)
 		if err != nil {
-			errors.Add(key, fmt.Errorf("error parsing value %s: %w", configuredValue, err))
+			errors.Add(key, fmt.Errorf("error parsing value: %w", err))
 			continue
 		}
 
