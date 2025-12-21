@@ -56,7 +56,7 @@
 ## [v0.1.0] - 2025-12-19
 
 ### Added
-- Initial release of goconfigtools
+- Initial release of goconfig
 - Load configuration from environment variables using struct tags
 - Support for nested structs
 - Optional default values via `default` tag

@@ -1,4 +1,4 @@
-package goconfigtools
+package goconfig
 
 import (
 	"context"

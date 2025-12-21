@@ -1,6 +1,6 @@
 # Defaulting and Required Fields
 
-This guide explains how goconfigtools handles default values and required fields.
+This guide explains how goconfig handles default values and required fields.
 
 ## Table of Contents
 
@@ -162,7 +162,7 @@ export USERNAME=
 
 ## Sentinel Errors
 
-goconfigtools provides two sentinel errors for missing configuration:
+goconfig provides two sentinel errors for missing configuration:
 
 ```go
 import "errors"
@@ -177,13 +177,13 @@ var ErrMissingValue = errors.New("missing value")
 You can check for these errors using `errors.Is()`:
 
 ```go
-err := goconfigtools.Load(&config)
+err := goconfig.Load(&config)
 if err != nil {
-    if errors.Is(err, goconfigtools.ErrMissingConfigKey) {
+    if errors.Is(err, goconfig.ErrMissingConfigKey) {
         // Handle missing key
         log.Println("Required environment variable not set")
     }
-    if errors.Is(err, goconfigtools.ErrMissingValue) {
+    if errors.Is(err, goconfig.ErrMissingValue) {
         // Handle empty value
         log.Println("Required environment variable is empty")
     }
@@ -208,7 +208,7 @@ func main() {
     }
 
     // Load will only override fields that are present in environment
-    if err := goconfigtools.Load(&cfg); err != nil {
+    if err := goconfig.Load(&cfg); err != nil {
         log.Fatalf("Configuration error: %v", err)
     }
 

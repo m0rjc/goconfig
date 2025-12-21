@@ -1,4 +1,4 @@
-// Package goconfigtools provides a simple way to load configuration from environment
+// Package goconfig provides a simple way to load configuration from environment
 // variables using struct tags.
 //
 // # Features
@@ -26,7 +26,7 @@
 //
 //	func main() {
 //	    var config Config
-//	    if err := goconfigtools.Load(context.Background(), &config); err != nil {
+//	    if err := goconfig.Load(context.Background(), &config); err != nil {
 //	        log.Fatalf("Failed to load configuration: %v", err)
 //	    }
 //	    // Port is guaranteed to be between 1024 and 65535
@@ -59,8 +59,8 @@
 //
 // Use the WithValidator option to add custom validation logic:
 //
-//	err := goconfigtools.Load(ctx, &cfg,
-//	    goconfigtools.WithValidator("APIKey", func(value any) error {
+//	err := goconfig.Load(ctx, &cfg,
+//	    goconfig.WithValidator("APIKey", func(value any) error {
 //	        key := value.(string)
 //	        if !strings.HasPrefix(key, "sk-") {
 //	            return fmt.Errorf("API key must start with 'sk-'")
@@ -73,8 +73,8 @@
 //
 // Use the WithParser option to provide custom parsing logic for specific fields:
 //
-//	err := goconfigtools.Load(ctx, &cfg,
-//	    goconfigtools.WithParser("SpecialField", func(value string) (any, error) {
+//	err := goconfig.Load(ctx, &cfg,
+//	    goconfig.WithParser("SpecialField", func(value string) (any, error) {
 //	        // Custom parsing logic
 //	        return customParse(value)
 //	    }),
@@ -90,16 +90,16 @@
 //	    return value, found, nil
 //	}
 //
-//	err := goconfigtools.Load(ctx, &config, goconfigtools.WithKeyStore(myStore))
+//	err := goconfig.Load(ctx, &config, goconfig.WithKeyStore(myStore))
 //
 // You can also chain multiple key stores using CompositeStore, which tries each
 // store in order until one returns a value:
 //
-//	store := goconfigtools.CompositeStore(
+//	store := goconfig.CompositeStore(
 //	    customStore,
-//	    goconfigtools.EnvironmentKeyStore,
+//	    goconfig.EnvironmentKeyStore,
 //	)
-//	err := goconfigtools.Load(ctx, &config, goconfigtools.WithKeyStore(store))
+//	err := goconfig.Load(ctx, &config, goconfig.WithKeyStore(store))
 //
 // # Error Handling
 //
@@ -111,12 +111,12 @@
 // When multiple configuration errors occur, they are collected into a ConfigErrors
 // type, which implements error and provides an Unwrap method for Go 1.20+ error inspection:
 //
-//	err := goconfigtools.Load(ctx, &config)
+//	err := goconfig.Load(ctx, &config)
 //	if err != nil {
-//	    var configErrs *goconfigtools.ConfigErrors
+//	    var configErrs *goconfig.ConfigErrors
 //	    if errors.As(err, &configErrs) {
 //	        for _, e := range configErrs.Unwrap() {
-//	            if errors.Is(e, goconfigtools.ErrMissingConfigKey) {
+//	            if errors.Is(e, goconfig.ErrMissingConfigKey) {
 //	                // Handle missing key
 //	            }
 //	        }
@@ -129,10 +129,10 @@
 //
 // For detailed guides and examples, see:
 //
-//   - https://github.com/m0rjc/goconfigtools/tree/main/docs - Full documentation
-//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/validation.md - Validation guide
-//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/defaulting.md - Defaulting behavior
-//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/json.md - JSON deserialization
-//   - https://github.com/m0rjc/goconfigtools/tree/main/docs/advanced.md - Advanced features
-//   - https://github.com/m0rjc/goconfigtools/tree/main/example - Working examples
-package goconfigtools
+//   - https://github.com/m0rjc/goconfig/tree/main/docs - Full documentation
+//   - https://github.com/m0rjc/goconfig/tree/main/docs/validation.md - Validation guide
+//   - https://github.com/m0rjc/goconfig/tree/main/docs/defaulting.md - Defaulting behavior
+//   - https://github.com/m0rjc/goconfig/tree/main/docs/json.md - JSON deserialization
+//   - https://github.com/m0rjc/goconfig/tree/main/docs/advanced.md - Advanced features
+//   - https://github.com/m0rjc/goconfig/tree/main/example - Working examples
+package goconfig

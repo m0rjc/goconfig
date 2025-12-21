@@ -1,6 +1,6 @@
 # Advanced Features
 
-This guide covers advanced features for extending goconfigtools with custom behavior.
+This guide covers advanced features for extending goconfig with custom behavior.
 
 ## Table of Contents
 
@@ -32,8 +32,8 @@ type CustomType struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithParser("SpecialValue", func(value string) (any, error) {
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithParser("SpecialValue", func(value string) (any, error) {
             // Parse the value however you need
             parts := strings.Split(value, ":")
             if len(parts) != 2 {
@@ -67,8 +67,8 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithParser("DatabaseURL", func(value string) (any, error) {
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithParser("DatabaseURL", func(value string) (any, error) {
             parsedURL, err := url.Parse(value)
             if err != nil {
                 return nil, fmt.Errorf("invalid URL: %w", err)
@@ -92,8 +92,8 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithParser("Timestamp", func(value string) (any, error) {
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithParser("Timestamp", func(value string) (any, error) {
             // Parse RFC3339 format
             t, err := time.Parse(time.RFC3339, value)
             if err != nil {
@@ -115,8 +115,8 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithParser("AllowedHosts", func(value string) (any, error) {
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithParser("AllowedHosts", func(value string) (any, error) {
             // Split on semicolons instead of commas
             hosts := strings.Split(value, ";")
 
@@ -143,8 +143,8 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithParser("EncryptionKey", func(value string) (any, error) {
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithParser("EncryptionKey", func(value string) (any, error) {
             // Decode base64-encoded key
             key, err := base64.StdEncoding.DecodeString(value)
             if err != nil {
@@ -164,7 +164,7 @@ func main() {
 Custom parsers should return descriptive errors:
 
 ```go
-goconfigtools.WithParser("Field", func(value string) (any, error) {
+goconfig.WithParser("Field", func(value string) (any, error) {
     // Good: Descriptive error
     return nil, fmt.Errorf("invalid format: expected 'key=value', got '%s'", value)
 
@@ -180,7 +180,7 @@ invalid value for FIELD: invalid format: expected 'key=value', got 'invalid-inpu
 
 ## Custom Key Stores
 
-By default, goconfigtools reads from environment variables using `os.LookupEnv`. You can provide custom key stores to read from other sources.
+By default, goconfig reads from environment variables using `os.LookupEnv`. You can provide custom key stores to read from other sources.
 
 ### Key Store Function Signature
 
@@ -197,7 +197,7 @@ type KeyStore func(ctx context.Context, key string) (value string, found bool, e
 ### Reading from a File
 
 ```go
-func fileKeyStore(filename string) goconfigtools.KeyStore {
+func fileKeyStore(filename string) goconfig.KeyStore {
     return func(ctx context.Context, key string) (string, bool, error) {
         data, err := os.ReadFile(filename)
         if err != nil {
@@ -225,8 +225,8 @@ func fileKeyStore(filename string) goconfigtools.KeyStore {
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(fileKeyStore("/etc/myapp/config")),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(fileKeyStore("/etc/myapp/config")),
     )
 }
 ```
@@ -234,7 +234,7 @@ func main() {
 ### Reading from AWS Secrets Manager
 
 ```go
-func awsSecretsKeyStore(secretsClient *secretsmanager.Client, secretName string) goconfigtools.KeyStore {
+func awsSecretsKeyStore(secretsClient *secretsmanager.Client, secretName string) goconfig.KeyStore {
     return func(ctx context.Context, key string) (string, bool, error) {
         result, err := secretsClient.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
             SecretId: aws.String(secretName),
@@ -258,7 +258,7 @@ func awsSecretsKeyStore(secretsClient *secretsmanager.Client, secretName string)
 ### Reading from HashiCorp Vault
 
 ```go
-func vaultKeyStore(client *vault.Client, path string) goconfigtools.KeyStore {
+func vaultKeyStore(client *vault.Client, path string) goconfig.KeyStore {
     return func(ctx context.Context, key string) (string, bool, error) {
         secret, err := client.KVv2("secret").Get(ctx, path)
         if err != nil {
@@ -278,7 +278,7 @@ func vaultKeyStore(client *vault.Client, path string) goconfigtools.KeyStore {
 ### In-Memory Key Store (for testing)
 
 ```go
-func mapKeyStore(data map[string]string) goconfigtools.KeyStore {
+func mapKeyStore(data map[string]string) goconfig.KeyStore {
     return func(ctx context.Context, key string) (string, bool, error) {
         value, found := data[key]
         return value, found, nil
@@ -294,8 +294,8 @@ func TestConfig(t *testing.T) {
         "API_KEY": "sk-test-key-12345678901234",
     }
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(mapKeyStore(testData)),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(mapKeyStore(testData)),
     )
 
     if err != nil {
@@ -315,13 +315,13 @@ func main() {
     var cfg Config
 
     // Try environment first, then fall back to config file
-    store := goconfigtools.CompositeStore(
-        goconfigtools.EnvironmentKeyStore,
+    store := goconfig.CompositeStore(
+        goconfig.EnvironmentKeyStore,
         fileKeyStore("/etc/myapp/config"),
     )
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(store),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(store),
     )
 }
 ```
@@ -333,13 +333,13 @@ func main() {
     var cfg Config
 
     // Environment variables can override secrets manager
-    store := goconfigtools.CompositeStore(
-        goconfigtools.EnvironmentKeyStore,
+    store := goconfig.CompositeStore(
+        goconfig.EnvironmentKeyStore,
         awsSecretsKeyStore(secretsClient, "prod/myapp"),
     )
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(store),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(store),
     )
 }
 ```
@@ -355,14 +355,14 @@ func main() {
     // 2. Vault secrets
     // 3. Local config file
     // 4. Default values in struct tags (automatic fallback)
-    store := goconfigtools.CompositeStore(
-        goconfigtools.EnvironmentKeyStore,
+    store := goconfig.CompositeStore(
+        goconfig.EnvironmentKeyStore,
         vaultKeyStore(vaultClient, "secret/myapp"),
         fileKeyStore("/etc/myapp/config"),
     )
 
-    err := goconfigtools.Load(context.Background(), &cfg,
-        goconfigtools.WithKeyStore(store),
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithKeyStore(store),
     )
 }
 ```
@@ -374,9 +374,9 @@ func main() {
 When multiple configuration errors occur, they are collected into a `ConfigErrors` type:
 
 ```go
-err := goconfigtools.Load(context.Background(), &config)
+err := goconfig.Load(context.Background(), &config)
 if err != nil {
-    var configErrs *goconfigtools.ConfigErrors
+    var configErrs *goconfig.ConfigErrors
     if errors.As(err, &configErrs) {
         // Multiple errors occurred
         for _, e := range configErrs.Unwrap() {
@@ -414,20 +414,20 @@ func LogError(logger *slog.Logger, err error) {
 ### Checking Specific Error Types
 
 ```go
-err := goconfigtools.Load(context.Background(), &config)
+err := goconfig.Load(context.Background(), &config)
 if err != nil {
     // Check for missing key
-    if errors.Is(err, goconfigtools.ErrMissingConfigKey) {
+    if errors.Is(err, goconfig.ErrMissingConfigKey) {
         log.Println("Required environment variable not set")
     }
 
     // Check for missing value
-    if errors.Is(err, goconfigtools.ErrMissingValue) {
+    if errors.Is(err, goconfig.ErrMissingValue) {
         log.Println("Required environment variable is empty")
     }
 
     // Check for field-specific errors
-    var fieldErr *goconfigtools.FieldError
+    var fieldErr *goconfig.FieldError
     if errors.As(err, &fieldErr) {
         log.Printf("Error in field %s (key %s): %v",
             fieldErr.Field, fieldErr.Key, fieldErr.Err)
@@ -443,20 +443,20 @@ You can combine multiple advanced features:
 func main() {
     var cfg Config
 
-    err := goconfigtools.Load(context.Background(), &cfg,
+    err := goconfig.Load(context.Background(), &cfg,
         // Custom key store
-        goconfigtools.WithKeyStore(goconfigtools.CompositeStore(
-            goconfigtools.EnvironmentKeyStore,
+        goconfig.WithKeyStore(goconfig.CompositeStore(
+            goconfig.EnvironmentKeyStore,
             vaultKeyStore(vaultClient, "secret/myapp"),
         )),
 
         // Custom parsers
-        goconfigtools.WithParser("DatabaseURL", parseURL),
-        goconfigtools.WithParser("EncryptionKey", parseBase64Key),
+        goconfig.WithParser("DatabaseURL", parseURL),
+        goconfig.WithParser("EncryptionKey", parseBase64Key),
 
         // Custom validators
-        goconfigtools.WithValidator("APIKey", validateAPIKey),
-        goconfigtools.WithValidator("Database.Host", validateProductionHost),
+        goconfig.WithValidator("APIKey", validateAPIKey),
+        goconfig.WithValidator("Database.Host", validateProductionHost),
     )
 
     if err != nil {

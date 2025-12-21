@@ -1,4 +1,4 @@
-# goconfigtools
+# goconfig
 
 A simple, type-safe Go library for loading configuration from environment variables using struct tags.
 
@@ -15,7 +15,7 @@ A simple, type-safe Go library for loading configuration from environment variab
 ## Installation
 
 ```bash
-go get github.com/m0rjc/goconfigtools
+go get github.com/m0rjc/goconfig
 ```
 
 ## Quick Start
@@ -29,7 +29,7 @@ import (
     "log"
     "time"
 
-    "github.com/m0rjc/goconfigtools"
+    "github.com/m0rjc/goconfig"
 )
 
 type Config struct {
@@ -53,7 +53,7 @@ type Config struct {
 func main() {
     var config Config
 
-    if err := goconfigtools.Load(context.Background(), &config); err != nil {
+    if err := goconfig.Load(context.Background(), &config); err != nil {
         log.Fatalf("Failed to load configuration: %v", err)
     }
 
@@ -116,8 +116,8 @@ invalid value for PORT: value 500 is below minimum 1024
 ### Custom Validators
 
 ```go
-err := goconfigtools.Load(context.Background(), &cfg,
-    goconfigtools.WithValidator("APIKey", func(value any) error {
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithValidator("APIKey", func(value any) error {
         key := value.(string)
         if !strings.HasPrefix(key, "sk-") {
             return fmt.Errorf("API key must start with 'sk-'")
@@ -172,13 +172,13 @@ Read from sources other than environment variables:
 
 ```go
 // Composite store: try environment, then fall back to file
-store := goconfigtools.CompositeStore(
-    goconfigtools.EnvironmentKeyStore,
+store := goconfig.CompositeStore(
+    goconfig.EnvironmentKeyStore,
     fileKeyStore("/etc/myapp/config"),
 )
 
-err := goconfigtools.Load(context.Background(), &cfg,
-    goconfigtools.WithKeyStore(store),
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithKeyStore(store),
 )
 ```
 
@@ -189,10 +189,10 @@ Supports AWS Secrets Manager, HashiCorp Vault, config files, and more.
 ## Error Handling
 
 ```go
-err := goconfigtools.Load(context.Background(), &config)
+err := goconfig.Load(context.Background(), &config)
 if err != nil {
     // Check for specific errors
-    if errors.Is(err, goconfigtools.ErrMissingConfigKey) {
+    if errors.Is(err, goconfig.ErrMissingConfigKey) {
         log.Fatal("Missing required environment variable")
     }
 
@@ -210,7 +210,7 @@ go test -v
 
 ## Contributing
 
-Contributions welcome! Please open an issue or pull request on [GitHub](https://github.com/m0rjc/goconfigtools).
+Contributions welcome! Please open an issue or pull request on [GitHub](https://github.com/m0rjc/goconfig).
 
 ## License
 
@@ -219,5 +219,5 @@ MIT License - see [LICENSE](LICENSE) file for details.
 ## Links
 
 - 📚 [Documentation](docs/)
-- 🐙 [GitHub Repository](https://github.com/m0rjc/goconfigtools)
-- 📦 [pkg.go.dev](https://pkg.go.dev/github.com/m0rjc/goconfigtools)
+- 🐙 [GitHub Repository](https://github.com/m0rjc/goconfig)
+- 📦 [pkg.go.dev](https://pkg.go.dev/github.com/m0rjc/goconfig)
