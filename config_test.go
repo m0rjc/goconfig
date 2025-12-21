@@ -466,7 +466,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value below minimum")
 	}
-	if err.Error() != "PORT: below minimum 1024" {
+	if err.Error() != "PORT: must be between 1024 and 65535" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
@@ -478,7 +478,7 @@ func TestLoad_BuiltinValidators_RootField(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error for value above maximum")
 	}
-	if err.Error() != "PORT: exceeds maximum 65535" {
+	if err.Error() != "PORT: must be between 1024 and 65535" {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -569,13 +569,13 @@ func TestLoad_BuiltinValidators_WithCustomValidator(t *testing.T) {
 		t.Errorf("Unexpected error: %v", err)
 	}
 
-	// Test min validation still works
+	// Test range validation still works
 	os.Clearenv()
 	os.Setenv("PORT", "500")
 	var cfg2 PortConfig
 	err = Load(context.Background(), &cfg2)
-	if err == nil || err.Error() != "PORT: below minimum 1024" {
-		t.Errorf("Expected min validation to fail, got %v", err)
+	if err == nil || err.Error() != "PORT: must be between 1024 and 65535" {
+		t.Errorf("Expected range validation to fail, got %v", err)
 	}
 }
 
@@ -871,8 +871,8 @@ func TestLoad_MultipleRuntimeErrors(t *testing.T) {
 	if !contains(errMsg, "ParseInt") {
 		t.Errorf("Error should mention invalid int value. Got %s", errMsg)
 	}
-	if !contains(errMsg, "exceeds maximum") {
-		t.Error("Error should mention exceeds maximum")
+	if !contains(errMsg, "must be between") {
+		t.Error("Error should mention range validation")
 	}
 }
 

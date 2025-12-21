@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.0.0] - 2025-12-21
+
+### Added
+
+- **Range Validator**: If both `min` and `max` are present then use a Range Validator. This improves error messages.
+  For example `PORT: must be between 1024 and 65536`
+
+### Fixed
+
+- **Do not log input**: Error messages were changed to not mention input values. This is for security, to prevent secrets
+  leakage into logs. [#15](https://github.com/m0rjc/goconfig/issues/15)
+
+### Breaking Changes
+
+- **Module Rename**: The module was renamed from `goconfigtools` to `goconfig`. Its github repository was also renamed.
+
 ## [v1.0.0-beta.2] - 2025-12-20
 
 ### Fixed

@@ -611,26 +611,35 @@ func TestBuiltinValidatorFactory_MultipleTags(t *testing.T) {
 		t.Fatalf("Failed to register validators: %v", err)
 	}
 
-	if len(mock.validators) != 2 {
-		t.Errorf("Expected 2 validators, got %d", len(mock.validators))
+	// With range validation, both min and max create a single range validator
+	if len(mock.validators) != 1 {
+		t.Errorf("Expected 1 validator, got %d", len(mock.validators))
 	}
 
-	// Test both validators work
-	minValidator := mock.validators[0]
-	maxValidator := mock.validators[1]
+	// Test the range validator works
+	rangeValidator := mock.validators[0]
 
-	if err := minValidator(int64(8080)); err != nil {
-		t.Errorf("Min validator should pass for value 8080: %v", err)
-	}
-	if err := maxValidator(int64(8080)); err != nil {
-		t.Errorf("Max validator should pass for value 8080: %v", err)
+	// Valid value in range
+	if err := rangeValidator(int64(8080)); err != nil {
+		t.Errorf("Range validator should pass for value 8080: %v", err)
 	}
 
-	if err := minValidator(int64(500)); err == nil {
-		t.Error("Min validator should fail for value 500")
+	// Below minimum
+	if err := rangeValidator(int64(500)); err == nil {
+		t.Error("Range validator should fail for value 500 (below minimum)")
 	}
-	if err := maxValidator(int64(70000)); err == nil {
-		t.Error("Max validator should fail for value 70000")
+
+	// Above maximum
+	if err := rangeValidator(int64(70000)); err == nil {
+		t.Error("Range validator should fail for value 70000 (above maximum)")
+	}
+
+	// At boundaries
+	if err := rangeValidator(int64(1024)); err != nil {
+		t.Errorf("Range validator should pass for value 1024 (at minimum): %v", err)
+	}
+	if err := rangeValidator(int64(65535)); err != nil {
+		t.Errorf("Range validator should pass for value 65535 (at maximum): %v", err)
 	}
 }
 
@@ -859,26 +868,35 @@ func TestBuiltinValidatorFactory_DurationMultipleTags(t *testing.T) {
 		t.Fatalf("Failed to register validators: %v", err)
 	}
 
-	if len(mock.validators) != 2 {
-		t.Errorf("Expected 2 validators, got %d", len(mock.validators))
+	// With range validation, both min and max create a single range validator
+	if len(mock.validators) != 1 {
+		t.Errorf("Expected 1 validator, got %d", len(mock.validators))
 	}
 
-	// Test both validators work
-	minValidator := mock.validators[0]
-	maxValidator := mock.validators[1]
+	// Test the range validator works
+	rangeValidator := mock.validators[0]
 
-	if err := minValidator(1 * time.Minute); err != nil {
-		t.Errorf("Min validator should pass for value 1m: %v", err)
-	}
-	if err := maxValidator(1 * time.Minute); err != nil {
-		t.Errorf("Max validator should pass for value 1m: %v", err)
+	// Valid value in range
+	if err := rangeValidator(1 * time.Minute); err != nil {
+		t.Errorf("Range validator should pass for value 1m: %v", err)
 	}
 
-	if err := minValidator(10 * time.Second); err == nil {
-		t.Error("Min validator should fail for value 10s")
+	// Below minimum
+	if err := rangeValidator(10 * time.Second); err == nil {
+		t.Error("Range validator should fail for value 10s (below minimum)")
 	}
-	if err := maxValidator(10 * time.Minute); err == nil {
-		t.Error("Max validator should fail for value 10m")
+
+	// Above maximum
+	if err := rangeValidator(10 * time.Minute); err == nil {
+		t.Error("Range validator should fail for value 10m (above maximum)")
+	}
+
+	// At boundaries
+	if err := rangeValidator(30 * time.Second); err != nil {
+		t.Errorf("Range validator should pass for value 30s (at minimum): %v", err)
+	}
+	if err := rangeValidator(5 * time.Minute); err != nil {
+		t.Errorf("Range validator should pass for value 5m (at maximum): %v", err)
 	}
 }
 
@@ -909,5 +927,234 @@ func TestBuiltinValidatorFactory_InvalidDurationMaxTag(t *testing.T) {
 	err := builtinValidatorFactory(fieldType, registry)
 	if err == nil {
 		t.Fatal("Expected error for invalid duration max tag")
+	}
+}
+
+// TestCreateRangeValidator_Int tests range validation for integer types
+func TestCreateRangeValidator_Int(t *testing.T) {
+	validator, err := createRangeValidator(reflect.Int, "1024", "65535")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     int64
+		shouldErr bool
+		errMsg    string
+	}{
+		{"within range", int64(8080), false, ""},
+		{"at minimum", int64(1024), false, ""},
+		{"at maximum", int64(65535), false, ""},
+		{"below minimum", int64(500), true, "must be between 1024 and 65535"},
+		{"above maximum", int64(70000), true, "must be between 1024 and 65535"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateRangeValidator_Uint tests range validation for unsigned integer types
+func TestCreateRangeValidator_Uint(t *testing.T) {
+	validator, err := createRangeValidator(reflect.Uint, "512", "4096")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     uint64
+		shouldErr bool
+		errMsg    string
+	}{
+		{"within range", uint64(1024), false, ""},
+		{"at minimum", uint64(512), false, ""},
+		{"at maximum", uint64(4096), false, ""},
+		{"below minimum", uint64(100), true, "must be between 512 and 4096"},
+		{"above maximum", uint64(5000), true, "must be between 512 and 4096"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateRangeValidator_Float tests range validation for float types
+func TestCreateRangeValidator_Float(t *testing.T) {
+	validator, err := createRangeValidator(reflect.Float64, "0.1", "10000.0")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     float64
+		shouldErr bool
+		errMsg    string
+	}{
+		{"within range", 100.0, false, ""},
+		{"at minimum", 0.1, false, ""},
+		{"at maximum", 10000.0, false, ""},
+		{"below minimum", 0.05, true, "must be between 0.100000 and 10000.000000"},
+		{"above maximum", 15000.0, true, "must be between 0.100000 and 10000.000000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateRangeValidator_InvalidMinValue tests error handling for invalid min values
+func TestCreateRangeValidator_InvalidMinValue(t *testing.T) {
+	tests := []struct {
+		name string
+		kind reflect.Kind
+		min  string
+		max  string
+	}{
+		{"invalid int min", reflect.Int, "not-a-number", "65535"},
+		{"invalid uint min", reflect.Uint, "not-a-number", "4096"},
+		{"invalid float min", reflect.Float64, "not-a-number", "10000.0"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := createRangeValidator(tt.kind, tt.min, tt.max)
+			if err == nil {
+				t.Error("Expected error for invalid min value")
+			}
+		})
+	}
+}
+
+// TestCreateRangeValidator_InvalidMaxValue tests error handling for invalid max values
+func TestCreateRangeValidator_InvalidMaxValue(t *testing.T) {
+	tests := []struct {
+		name string
+		kind reflect.Kind
+		min  string
+		max  string
+	}{
+		{"invalid int max", reflect.Int, "1024", "not-a-number"},
+		{"invalid uint max", reflect.Uint, "512", "not-a-number"},
+		{"invalid float max", reflect.Float64, "0.1", "not-a-number"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := createRangeValidator(tt.kind, tt.min, tt.max)
+			if err == nil {
+				t.Error("Expected error for invalid max value")
+			}
+		})
+	}
+}
+
+// TestCreateRangeValidator_UnsupportedType tests error for unsupported types
+func TestCreateRangeValidator_UnsupportedType(t *testing.T) {
+	_, err := createRangeValidator(reflect.String, "1", "10")
+	if err == nil {
+		t.Fatal("Expected error for unsupported type")
+	}
+	if err.Error() != "range validation not supported for type string" {
+		t.Errorf("Unexpected error message: %v", err)
+	}
+}
+
+// TestCreateRangeDurationValidator tests range validation for duration types
+func TestCreateRangeDurationValidator(t *testing.T) {
+	validator, err := createRangeDurationValidator("1s", "5m")
+	if err != nil {
+		t.Fatalf("Failed to create validator: %v", err)
+	}
+
+	tests := []struct {
+		name      string
+		value     time.Duration
+		shouldErr bool
+		errMsg    string
+	}{
+		{"within range", 30 * time.Second, false, ""},
+		{"at minimum", 1 * time.Second, false, ""},
+		{"at maximum", 5 * time.Minute, false, ""},
+		{"below minimum", 500 * time.Millisecond, true, "must be between 1s and 5m0s"},
+		{"above maximum", 10 * time.Minute, true, "must be between 1s and 5m0s"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validator(tt.value)
+			if tt.shouldErr {
+				if err == nil {
+					t.Fatalf("Expected error %q, got nil", tt.errMsg)
+				}
+				if err.Error() != tt.errMsg {
+					t.Errorf("Expected error %q, got %q", tt.errMsg, err.Error())
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Expected no error, got %v", err)
+				}
+			}
+		})
+	}
+}
+
+// TestCreateRangeDurationValidator_InvalidMinValue tests error handling for invalid min duration values
+func TestCreateRangeDurationValidator_InvalidMinValue(t *testing.T) {
+	_, err := createRangeDurationValidator("not-a-duration", "5m")
+	if err == nil {
+		t.Error("Expected error for invalid min duration value")
+	}
+}
+
+// TestCreateRangeDurationValidator_InvalidMaxValue tests error handling for invalid max duration values
+func TestCreateRangeDurationValidator_InvalidMaxValue(t *testing.T) {
+	_, err := createRangeDurationValidator("1s", "not-a-duration")
+	if err == nil {
+		t.Error("Expected error for invalid max duration value")
 	}
 }

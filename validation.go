@@ -95,6 +95,16 @@ func builtinValidatorFactory(fieldType reflect.StructField, registry ValidatorRe
 	// This is necessary because time.Duration is an alias for int64, but we want to
 	// parse the min/max tags as duration strings (e.g., "30s", "5m") rather than integers
 	if fieldType.Type == reflect.TypeOf(time.Duration(0)) {
+		// If both min and max are present, create a range validator
+		if minTag != "" && maxTag != "" {
+			validator, err := createRangeDurationValidator(minTag, maxTag)
+			if err != nil {
+				return fmt.Errorf("invalid min/max tag values %q/%q for field %s: %w", minTag, maxTag, fieldType.Name, err)
+			}
+			registry(validator)
+			return nil
+		}
+
 		// Register min validator for duration
 		if minTag != "" {
 			validator, err := createMinDurationValidator(minTag)
@@ -118,22 +128,31 @@ func builtinValidatorFactory(fieldType reflect.StructField, registry ValidatorRe
 
 	kind := fieldType.Type.Kind()
 
-	// Register min validator
-	if minTag != "" {
-		validator, err := createMinValidator(kind, minTag)
+	// If both min and max are present, create a range validator
+	if minTag != "" && maxTag != "" {
+		validator, err := createRangeValidator(kind, minTag, maxTag)
 		if err != nil {
-			return fmt.Errorf("invalid min tag value %q for field %s: %w", minTag, fieldType.Name, err)
+			return fmt.Errorf("invalid min/max tag values %q/%q for field %s: %w", minTag, maxTag, fieldType.Name, err)
 		}
 		registry(validator)
-	}
+	} else {
+		// Register min validator
+		if minTag != "" {
+			validator, err := createMinValidator(kind, minTag)
+			if err != nil {
+				return fmt.Errorf("invalid min tag value %q for field %s: %w", minTag, fieldType.Name, err)
+			}
+			registry(validator)
+		}
 
-	// Register max validator
-	if maxTag != "" {
-		validator, err := createMaxValidator(kind, maxTag)
-		if err != nil {
-			return fmt.Errorf("invalid max tag value %q for field %s: %w", maxTag, fieldType.Name, err)
+		// Register max validator
+		if maxTag != "" {
+			validator, err := createMaxValidator(kind, maxTag)
+			if err != nil {
+				return fmt.Errorf("invalid max tag value %q for field %s: %w", maxTag, fieldType.Name, err)
+			}
+			registry(validator)
 		}
-		registry(validator)
 	}
 
 	// Register pattern validator for strings
@@ -242,6 +261,65 @@ func createMaxValidator(kind reflect.Kind, maxStr string) (Validator, error) {
 	}
 }
 
+// createRangeValidator creates a range validator that checks both min and max for the given type.
+func createRangeValidator(kind reflect.Kind, minStr, maxStr string) (Validator, error) {
+	switch kind {
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+		min, err := strconv.ParseInt(minStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		max, err := strconv.ParseInt(maxStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return func(value any) error {
+			v := value.(int64)
+			if v < min || v > max {
+				return fmt.Errorf("must be between %d and %d", min, max)
+			}
+			return nil
+		}, nil
+
+	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+		min, err := strconv.ParseUint(minStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		max, err := strconv.ParseUint(maxStr, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		return func(value any) error {
+			v := value.(uint64)
+			if v < min || v > max {
+				return fmt.Errorf("must be between %d and %d", min, max)
+			}
+			return nil
+		}, nil
+
+	case reflect.Float32, reflect.Float64:
+		min, err := strconv.ParseFloat(minStr, 64)
+		if err != nil {
+			return nil, err
+		}
+		max, err := strconv.ParseFloat(maxStr, 64)
+		if err != nil {
+			return nil, err
+		}
+		return func(value any) error {
+			v := value.(float64)
+			if v < min || v > max {
+				return fmt.Errorf("must be between %f and %f", min, max)
+			}
+			return nil
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("range validation not supported for type %s", kind)
+	}
+}
+
 // createMinDurationValidator creates a minimum duration validator.
 func createMinDurationValidator(minStr string) (Validator, error) {
 	min, err := time.ParseDuration(minStr)
@@ -267,6 +345,25 @@ func createMaxDurationValidator(maxStr string) (Validator, error) {
 		v := value.(time.Duration)
 		if v > max {
 			return fmt.Errorf("exceeds maximum %s", max)
+		}
+		return nil
+	}, nil
+}
+
+// createRangeDurationValidator creates a range validator that checks both min and max for duration.
+func createRangeDurationValidator(minStr, maxStr string) (Validator, error) {
+	min, err := time.ParseDuration(minStr)
+	if err != nil {
+		return nil, err
+	}
+	max, err := time.ParseDuration(maxStr)
+	if err != nil {
+		return nil, err
+	}
+	return func(value any) error {
+		v := value.(time.Duration)
+		if v < min || v > max {
+			return fmt.Errorf("must be between %s and %s", min, max)
 		}
 		return nil
 	}, nil
