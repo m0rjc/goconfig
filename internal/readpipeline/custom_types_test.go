@@ -246,7 +246,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 			}{
 				{"12", ""},                // Pass: >= 10 and even
 				{"11", "must be even"},    // Fail: >= 10 but odd (prepended validator fails)
-				{"8", "below mininum 10"}, // Fail: < 10 (base validator fails)
+				{"8", "below minimum 10"}, // Fail: < 10 (base validator fails)
 			}
 
 			for _, tt := range tests {
