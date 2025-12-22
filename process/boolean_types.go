@@ -5,8 +5,13 @@ import (
 	"strconv"
 )
 
-func NewBoolHandler(fieldType reflect.Type) Handler {
-	return TypeHandler[bool]{
+func NewBoolHandler(_ reflect.Type) PipelineBuilder {
+	return NewTypedBoolHandler()
+}
+
+// NewTypedBoolHandler returns a TypedHandler[bool] that uses standard bool parsing and validation.
+func NewTypedBoolHandler() TypedHandler[bool] {
+	return typeHandlerImpl[bool]{
 		Parser: func(rawValue string) (bool, error) {
 			return strconv.ParseBool(rawValue)
 		},

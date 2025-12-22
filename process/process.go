@@ -24,11 +24,12 @@ func New(fieldType reflect.Type, tags reflect.StructTag, registry *TypeRegistry)
 		return nil, fmt.Errorf("no handler for type %s", targetType)
 	}
 
-	// This remains two distinct steps so that the Custom Types Decorator can intercept the process
-	pipeline := handler.GetParser()
+	pipeline, err := handler.Build(tags)
+	if err != nil {
+		return nil, err
+	}
 	if pipeline == nil {
 		return nil, fmt.Errorf("no parser for type %s", targetType)
 	}
-
-	return handler.AddValidatorsToPipeline(tags, pipeline)
+	return pipeline, nil
 }

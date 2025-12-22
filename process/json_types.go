@@ -5,8 +5,8 @@ import (
 	"reflect"
 )
 
-func NewJsonHandler(targetType reflect.Type) Handler {
-	return TypeHandler[any]{
+func NewJsonHandler(targetType reflect.Type) PipelineBuilder {
+	return typeHandlerImpl[any]{
 		Parser: func(rawValue string) (any, error) {
 			ptr := reflect.New(targetType).Interface()
 			err := json.Unmarshal([]byte(rawValue), ptr)

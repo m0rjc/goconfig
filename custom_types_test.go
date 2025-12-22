@@ -15,17 +15,16 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 		type CustomStruct struct {
 			Field1 string
 		}
-		customStructType := reflect.TypeOf(CustomStruct{})
 		mockStore := func(ctx context.Context, key string) (string, bool, error) {
 			if key == "CUSTOM_STRUCT" {
 				return "--Marker--", true, nil
 			}
 			return "", false, nil
 		}
-		mockParser := func(value string) (any, error) {
+		mockParser := func(value string) (CustomStruct, error) {
 			return CustomStruct{Field1: value}, nil
 		}
-		mockHandler := process.NewCustomHandler(mockParser)
+		mockHandler := process.NewCustomHandler[CustomStruct](mockParser)
 
 		t.Run("struct as value", func(t *testing.T) {
 			type Config struct {
@@ -34,7 +33,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 
 			config := Config{Value: CustomStruct{Field1: ""}}
 			err := Load(context.Background(), &config,
-				WithCustomType(customStructType, mockHandler),
+				WithCustomType[CustomStruct](mockHandler),
 				WithKeyStore(mockStore))
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
@@ -51,7 +50,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 
 			config := Config{Value: nil}
 			err := Load(context.Background(), &config,
-				WithCustomType(customStructType, mockHandler),
+				WithCustomType[CustomStruct](mockHandler),
 				WithKeyStore(mockStore))
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
@@ -71,7 +70,6 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 			CustomEnum1 CustomEnum = "--Marker--1--"
 			CustomEnum2 CustomEnum = "--Marker--2--"
 		)
-		customEnumType := reflect.TypeOf(CustomEnum(""))
 		mockStore := func(ctx context.Context, key string) (string, bool, error) {
 			if key == "CUSTOM_ENUM_1" {
 				return string(CustomEnum1), true, nil
@@ -103,7 +101,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 
 			config := Config{}
 			err := Load(context.Background(), &config,
-				WithCustomType(customEnumType, mockHandler),
+				WithCustomType[CustomEnum](mockHandler),
 				WithKeyStore(mockStore))
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
@@ -126,7 +124,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 
 			config := Config{}
 			err := Load(context.Background(), &config,
-				WithCustomType(customEnumType, mockHandler),
+				WithCustomType[CustomEnum](mockHandler),
 				WithKeyStore(mockStore))
 			if err == nil {
 				t.Fatal("Load should have failed")
@@ -144,7 +142,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 
 			config := Config{}
 			err := Load(context.Background(), &config,
-				WithCustomType(customEnumType, mockHandler),
+				WithCustomType[CustomEnum](mockHandler),
 				WithKeyStore(mockStore))
 			if err != nil {
 				t.Fatalf("Load failed: %v", err)
@@ -157,6 +155,63 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 			}
 			if config.Other != "foo" {
 				t.Errorf("Expected Other to be set to foo, got %s", config.Other)
+			}
+		})
+	})
+
+	t.Run("WithCustomType can add validation to an existing type", func(t *testing.T) {
+		type Config struct {
+			Port int `key:"PORT" min:"1000"`
+		}
+
+		mockStore := func(ctx context.Context, key string) (string, bool, error) {
+			if key == "PORT" {
+				return "1024", true, nil
+			}
+			return "", false, nil
+		}
+
+		// Modification: must be even
+		t.Run("Adding validator to int", func(t *testing.T) {
+			// Reuse the standard int handler logic and add a validator
+			base := process.NewTypedIntHandler(reflect.TypeOf(int(0)).Bits())
+			mod := process.NewCustomHandler[int](func(s string) (int, error) {
+				v, err := base.GetParser()(s)
+				return int(v), err
+			}, func(v int) error {
+				if v%2 != 0 {
+					return errors.New("must be even")
+				}
+				return nil
+			})
+
+			var cfg Config
+			err := Load(context.Background(), &cfg,
+				WithKeyStore(mockStore),
+				WithCustomType[int](mod))
+
+			if err != nil {
+				t.Fatalf("Load failed: %v", err)
+			}
+			if cfg.Port != 1024 {
+				t.Errorf("Expected 1024, got %d", cfg.Port)
+			}
+
+			// Test failure
+			mockStoreOdd := func(ctx context.Context, key string) (string, bool, error) {
+				return "1025", true, nil
+			}
+			err = Load(context.Background(), &cfg,
+				WithKeyStore(mockStoreOdd),
+				WithCustomType[int](mod))
+			if err == nil || !reflect.TypeOf(err).AssignableTo(reflect.TypeOf(&ConfigErrors{})) {
+				t.Fatalf("Expected ConfigErrors, got %v", err)
+			}
+			if !errors.Is(err, errors.New("must be even")) {
+				// ConfigErrors.Error() contains the string
+				if !reflect.ValueOf(err).MethodByName("HasErrors").Call(nil)[0].Bool() {
+					t.Fatal("Expected errors")
+				}
 			}
 		})
 	})

@@ -7,11 +7,12 @@ import (
 
 func TestInvalidTypes(t *testing.T) {
 	// This test will need to be removed or replaced if we ever support complex numbers
+	registry := NewDefaultTypeRegistry()
 	t.Run("Complex128", func(t *testing.T) {
 		fieldType := reflect.TypeOf(complex128(0))
 		tags := reflect.StructTag("")
 
-		_, err := New(fieldType, tags, nil, nil)
+		_, err := New(fieldType, tags, registry)
 		if err == nil {
 			t.Fatal("Expected error for complex128 type, but got nil")
 		}
@@ -27,7 +28,7 @@ func TestInvalidTypes(t *testing.T) {
 		fieldType := reflect.TypeOf(&i).Elem()
 		tags := reflect.StructTag("")
 
-		_, err := New(fieldType, tags, nil, nil)
+		_, err := New(fieldType, tags, registry)
 		if err == nil {
 			t.Fatal("Expected error for interface type, but got nil")
 		}

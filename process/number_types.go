@@ -5,29 +5,43 @@ import (
 	"strconv"
 )
 
-func NewIntHandler(fieldType reflect.Type) Handler {
-	return TypeHandler[int64]{
+func NewIntHandler(fieldType reflect.Type) PipelineBuilder {
+	return NewTypedIntHandler(fieldType.Bits())
+}
+
+func NewUintHandler(fieldType reflect.Type) PipelineBuilder {
+	return NewTypedUintHandler(fieldType.Bits())
+}
+
+func NewFloatHandler(fieldType reflect.Type) PipelineBuilder {
+	return NewTypedFloatHandler(fieldType.Bits())
+}
+
+// NewTypedIntHandler returns a TypedHandler[int64] that uses standard int parsing and validation.
+func NewTypedIntHandler(bits int) TypedHandler[int64] {
+	return typeHandlerImpl[int64]{
 		Parser: func(rawValue string) (int64, error) {
-			// Use base 0 to allow input like 0xFF
-			return strconv.ParseInt(rawValue, 0, fieldType.Bits())
+			return strconv.ParseInt(rawValue, 0, bits)
 		},
 		ValidationWrapper: WrapProcessUsingRangeTags[int64],
 	}
 }
 
-func NewUintHandler(fieldType reflect.Type) Handler {
-	return TypeHandler[uint64]{
+// NewTypedUintHandler returns a TypedHandler[uint64] that uses standard uint parsing and validation.
+func NewTypedUintHandler(bits int) TypedHandler[uint64] {
+	return typeHandlerImpl[uint64]{
 		Parser: func(rawValue string) (uint64, error) {
-			return strconv.ParseUint(rawValue, 0, fieldType.Bits())
+			return strconv.ParseUint(rawValue, 0, bits)
 		},
 		ValidationWrapper: WrapProcessUsingRangeTags[uint64],
 	}
 }
 
-func NewFloatHandler(fieldType reflect.Type) Handler {
-	return TypeHandler[float64]{
+// NewTypedFloatHandler returns a TypedHandler[float64] that uses standard float parsing and validation.
+func NewTypedFloatHandler(bits int) TypedHandler[float64] {
+	return typeHandlerImpl[float64]{
 		Parser: func(rawValue string) (float64, error) {
-			return strconv.ParseFloat(rawValue, fieldType.Bits())
+			return strconv.ParseFloat(rawValue, bits)
 		},
 		ValidationWrapper: WrapProcessUsingRangeTags[float64],
 	}

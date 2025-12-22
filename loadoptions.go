@@ -18,16 +18,12 @@ func WithKeyStore(keyStore KeyStore) Option {
 }
 
 // WithCustomType registers a custom type handler for a given type.
-func WithCustomType(t reflect.Type, handler process.Handler) Option {
+func WithCustomType[T any](handler process.TypedHandler[T]) Option {
+	var typedNil *T
+	t := reflect.TypeOf(typedNil).Elem()
+
 	return func(opts *loadOptions) {
 		opts.typeRegistry.RegisterType(t, handler)
-	}
-}
-
-// WithCustomKind registers a custom type handler for a given kind.
-func WithCustomKind(t reflect.Kind, handler process.HandlerFactory) Option {
-	return func(opts *loadOptions) {
-		opts.typeRegistry.RegisterKind(t, handler)
 	}
 }
 

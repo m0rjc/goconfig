@@ -6,12 +6,13 @@ import (
 )
 
 func TestPointerTypes(t *testing.T) {
+	registry := NewDefaultTypeRegistry()
 	t.Run("PointerToInt", func(t *testing.T) {
 		var i *int
 		fieldType := reflect.TypeOf(i)
 		tags := reflect.StructTag(`min:"10"`)
 
-		processor, err := New(fieldType, tags, nil, nil)
+		processor, err := New(fieldType, tags, registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
 		}
@@ -37,7 +38,7 @@ func TestPointerTypes(t *testing.T) {
 		fieldType := reflect.TypeOf(s)
 		tags := reflect.StructTag(`pattern:"^abc.*$"`)
 
-		processor, err := New(fieldType, tags, nil, nil)
+		processor, err := New(fieldType, tags, registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
 		}
@@ -65,7 +66,7 @@ func TestPointerTypes(t *testing.T) {
 		var ms *MyStruct
 		fieldType := reflect.TypeOf(ms)
 
-		processor, err := New(fieldType, "", nil, nil)
+		processor, err := New(fieldType, "", registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
 		}
@@ -89,12 +90,15 @@ func TestPointerTypes(t *testing.T) {
 		var p *Point
 		fieldType := reflect.TypeOf(p)
 
-		customParser := func(rawValue string) (any, error) {
+		customParser := func(rawValue string) (Point, error) {
 			// Dummy parser for "1,2"
 			return Point{X: 1, Y: 2}, nil
 		}
 
-		processor, err := New(fieldType, "", customParser, nil)
+		registry := NewDefaultTypeRegistry()
+		registry.RegisterType(reflect.TypeOf(Point{}), NewCustomHandler(customParser))
+
+		processor, err := New(fieldType, "", registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
 		}

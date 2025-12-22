@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"os"
-	"reflect"
+	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/m0rjc/goconfig/process"
 )
 
 func TestLoad_Basic(t *testing.T) {
@@ -212,13 +214,17 @@ func TestLoad_Options(t *testing.T) {
 	}
 
 	t.Run("Custom Parser", func(t *testing.T) {
-		var cfg Config
-		// Custom parser that adds 1 to the port
-		customParser := func(rawValue string) (any, error) {
-			return int64(9000), nil
+		type Port int
+		type Config struct {
+			Port Port `key:"PORT"`
 		}
+		var cfg Config
+		// Custom parser for the custom Port type
+		handler := process.NewCustomHandler(func(rawValue string) (Port, error) {
+			return Port(9000), nil
+		})
 
-		err := Load(context.Background(), &cfg, WithKeyStore(mockStore), WithParser("Port", customParser))
+		err := Load(context.Background(), &cfg, WithKeyStore(mockStore), WithCustomType[Port](handler))
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -228,16 +234,22 @@ func TestLoad_Options(t *testing.T) {
 	})
 
 	t.Run("Custom Validator", func(t *testing.T) {
+		type Port int
+		type Config struct {
+			Port Port `key:"PORT"`
+		}
 		var cfg Config
-		customValidator := func(value any) error {
-			v := value.(int64)
-			if v != 8080 {
+		handler := process.NewCustomHandler(func(rawValue string) (Port, error) {
+			v, err := strconv.Atoi(rawValue)
+			return Port(v), err
+		}, func(value Port) error {
+			if value != 8080 {
 				return errors.New("wrong port")
 			}
 			return nil
-		}
+		})
 
-		err := Load(context.Background(), &cfg, WithKeyStore(mockStore), WithValidator("Port", customValidator))
+		err := Load(context.Background(), &cfg, WithKeyStore(mockStore), WithCustomType[Port](handler))
 		if err != nil {
 			t.Fatalf("Load failed: %v", err)
 		}
@@ -284,21 +296,26 @@ func TestLoad_Errors(t *testing.T) {
 	})
 
 	t.Run("Failure in getCustomValidators", func(t *testing.T) {
-		type Config struct {
-			Port int `key:"PORT"`
-		}
-		var cfg Config
 		mockStore := func(ctx context.Context, key string) (string, bool, error) {
 			return "8080", true, nil
 		}
-		failingFactory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
-			return errors.New("factory failure")
+		// Validator factories are no longer supported in this way
+		// Instead we use custom types with handlers
+		type CustomPort int
+		type CustomConfig struct {
+			Port CustomPort `key:"PORT"`
 		}
-		err := Load(ctx, &cfg, WithKeyStore(mockStore), WithValidatorFactory(failingFactory))
+		var customCfg CustomConfig
+
+		failingHandler := process.NewCustomHandler(func(rawValue string) (CustomPort, error) {
+			return 0, errors.New("factory failure")
+		})
+
+		err := Load(ctx, &customCfg, WithKeyStore(mockStore), WithCustomType[CustomPort](failingHandler))
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "custom validators for field Port: factory failure") {
+		if !strings.Contains(err.Error(), "factory failure") {
 			t.Errorf("Expected factory error, got: %v", err)
 		}
 	})
