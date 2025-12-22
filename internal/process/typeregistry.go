@@ -57,7 +57,15 @@ var specialTypeParsers = map[reflect.Type]Handler{
 // Category-based parsers
 var kindParsers = map[reflect.Kind]func(t reflect.Type) Handler{
 	reflect.Int:     NewIntHandler,
+	reflect.Int8:    NewIntHandler,
+	reflect.Int16:   NewIntHandler,
+	reflect.Int32:   NewIntHandler,
+	reflect.Int64:   NewIntHandler,
 	reflect.Uint:    NewUintHandler,
+	reflect.Uint8:   NewUintHandler,
+	reflect.Uint16:  NewUintHandler,
+	reflect.Uint32:  NewUintHandler,
+	reflect.Uint64:  NewUintHandler,
 	reflect.Struct:  NewJsonHandler,
 	reflect.Map:     NewJsonHandler,
 	reflect.String:  NewStringHandler,

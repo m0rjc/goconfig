@@ -8,6 +8,8 @@ import (
 // New creates a FieldProcessor for the given type. It reads struct tags to instantiate required
 // validators. It allows override using custom parsing and validation if supplied. Default validation is
 // applied before custom validators.
+// If the target type is a pointer, it will be unboxed before processing. The output of the process chain is the value.
+// The caller is responsible for assigning the value to the struct field, dealing with pointers as needed.
 func New(fieldType reflect.Type, tags reflect.StructTag, customParser FieldProcessor[any], customValidators []Validator[any]) (FieldProcessor[any], error) {
 	var err error
 	targetType := fieldType
