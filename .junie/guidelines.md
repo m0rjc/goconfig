@@ -33,14 +33,14 @@ func TestExampleLoad(t *testing.T) {
     var cfg Config
     
     // Mock KeyStore
-    mockStore := func(ctx context.Context, key string) (string, bool, error) {
+    MockStore := func(ctx context.Context, key string) (string, bool, error) {
         if key == "PORT" {
             return "9000", true, nil
         }
         return "", false, nil
     }
 
-    err := Load(ctx, &cfg, WithKeyStore(mockStore))
+    err := Load(ctx, &cfg, WithKeyStore(MockStore))
     if err != nil {
         t.Fatalf("Failed to load: %v", err)
     }

@@ -3,7 +3,7 @@ package goconfig
 import (
 	"reflect"
 
-	"github.com/m0rjc/goconfig/internal/process"
+	"github.com/m0rjc/goconfig/process"
 )
 
 // ValidatorRegistry is the callback to add a validator to the current field.

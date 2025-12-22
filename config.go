@@ -5,103 +5,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/m0rjc/goconfig/internal/process"
+	"github.com/m0rjc/goconfig/process"
 )
-
-// Option is a functional option for configuring the Load function.
-type Option func(*loadOptions)
-
-// WithValidatorFactory registers a custom validator factory.
-// Validator factories inspect struct fields and automatically register validators
-// based on field metadata (type, tags, name, etc.).
-//
-// Factories are called for each field during Load, allowing you to:
-//   - Add validation based on custom struct tags
-//   - Apply type-specific validation rules
-//   - Implement domain-specific validation patterns
-//
-// Example: Adding email validation via custom tag:
-//
-//	factory := func(fieldType reflect.StructField, registry ValidatorRegistry) error {
-//	    if fieldType.Tag.Get("email") == "true" {
-//	        registry(func(value any) error {
-//	            email := value.(string)
-//	            if !strings.Contains(email, "@") {
-//	                return fmt.Errorf("invalid email format")
-//	            }
-//	            return nil
-//	        })
-//	    }
-//	    return nil
-//	}
-//	Load(&cfg, WithValidatorFactory(factory))
-//
-// Multiple factories can be registered and will be called in registration order.
-// The builtin factory (for min, max, and pattern tags) is always registered first.
-func WithValidatorFactory(factory ValidatorFactory) Option {
-	return func(opts *loadOptions) {
-		opts.addValidatorFactory(factory)
-	}
-}
-
-// WithValidator registers a custom validator for a specific field path.
-// Path uses dot notation for nested fields (e.g., "AI.APIKey", "WebHook.Timeout").
-// Multiple validators can be registered for the same field; all will be executed in order.
-//
-// The validator receives the converted value (after type conversion from the environment
-// variable string) and should return an error if validation fails.
-//
-// Example: Validating a port is a multiple of 10:
-//
-//	Load(&cfg, WithValidator("Port", func(value any) error {
-//	    port := value.(int64)
-//	    if port%10 != 0 {
-//	        return fmt.Errorf("port must be multiple of 10")
-//	    }
-//	    return nil
-//	}))
-//
-// Use WithValidatorFactory instead if you want to apply validation based on
-// field metadata (tags, type, name) rather than explicit field paths.
-func WithValidator(path string, validator Validator) Option {
-	return func(opts *loadOptions) {
-		opts.addValidator(path, validator)
-	}
-}
-
-// WithParser registers a custom parser at a given path.
-func WithParser(path string, parser Parser) Option {
-	return func(opts *loadOptions) {
-		opts.addParser(path, parser)
-	}
-}
-
-type Parser = process.FieldProcessor[any]
-
-// WithKeyStore replaces the environment variable keystore with an alternative.
-// Use this to read from other sources such as a database or properties file.
-func WithKeyStore(keyStore KeyStore) Option {
-	return func(opts *loadOptions) {
-		opts.keyStore = keyStore
-	}
-}
-
-// newLoadOptions creates default load options.
-func newLoadOptions() *loadOptions {
-	return &loadOptions{
-		keyStore:           EnvironmentKeyStore,
-		parsers:            make(map[string]Parser),
-		validatorFactories: make([]ValidatorFactory, 0),
-		validators:         make(map[string][]Validator),
-	}
-}
-
-// applyOptions applies the given options to the load options.
-func (opts *loadOptions) applyOptions(options []Option) {
-	for _, opt := range options {
-		opt(opts)
-	}
-}
 
 // Load populates the given configuration struct from environment variables
 // using the `key`, `default`, `required`, `min`, `max`, and `pattern` struct tags.
@@ -231,13 +136,7 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 		}
 
 		// Configure the processor, then run it
-		customParser := opts.getCustomParser(currentPath)
-		customValidators, err := opts.getCustomValidators(currentPath, fieldType)
-		if err != nil {
-			return fmt.Errorf("custom validators for field %s: %w", currentPath, err)
-		}
-
-		processor, err := process.New(fieldType.Type, fieldType.Tag, customParser, customValidators)
+		processor, err := process.New(fieldType.Type, fieldType.Tag, opts.typeRegistry)
 		if err != nil {
 			return fmt.Errorf("setting up field process %s: %v", currentPath, err)
 		}
