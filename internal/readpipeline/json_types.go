@@ -1,4 +1,4 @@
-package process
+package readpipeline
 
 import (
 	"encoding/json"
@@ -15,7 +15,7 @@ func NewJsonHandler(targetType reflect.Type) PipelineBuilder {
 				return nil, err
 			}
 
-			// Dereference the value to maintain consistency with the maxim "Pipelines always process values"
+			// Dereference the value to maintain consistency with the maxim "Pipelines always readpipeline values"
 			return reflect.ValueOf(ptr).Elem().Interface(), nil
 		},
 

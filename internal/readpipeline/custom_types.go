@@ -1,4 +1,4 @@
-package process
+package readpipeline
 
 import (
 	"fmt"
@@ -53,6 +53,20 @@ func PrependValidators[B, T any](baseHandler TypedHandler[B], customValidators .
 	return typeHandlerImpl[T]{
 		Parser:            parser,
 		ValidationWrapper: NewCompositeWrapper[T](adaptedWrapper, newCustomValidatorWrapper(customValidators)),
+	}, nil
+}
+
+func CastHandler[B, T any](handler TypedHandler[B]) (TypedHandler[T], error) {
+	parser, err := castPipeline[B, T](handler.GetParser())
+	if err != nil {
+		return nil, err
+	}
+
+	wrapper := castWrapper[B, T](handler.GetWrapper())
+
+	return typeHandlerImpl[T]{
+		Parser:            parser,
+		ValidationWrapper: wrapper,
 	}, nil
 }
 

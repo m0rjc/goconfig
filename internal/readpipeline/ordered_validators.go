@@ -1,4 +1,4 @@
-package process
+package readpipeline
 
 import (
 	"cmp"
@@ -36,7 +36,7 @@ func newRangeValidator[T cmp.Ordered](minimum, maximum T) orderedValidator[T] {
 	}
 }
 
-// WrapProcessUsingRangeTags applies the min and max tags to an ordered process.
+// WrapProcessUsingRangeTags applies the min and max tags to an ordered readpipeline.
 func WrapProcessUsingRangeTags[T cmp.Ordered](tags reflect.StructTag, processor FieldProcessor[T]) (FieldProcessor[T], error) {
 	minTag, hasMin := tags.Lookup("min")
 	maxTag, hasMax := tags.Lookup("max")

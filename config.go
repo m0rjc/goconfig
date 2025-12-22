@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/m0rjc/goconfig/process"
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
 // Load populates the given configuration struct from environment variables
@@ -136,9 +136,9 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 		}
 
 		// Configure the processor, then run it
-		processor, err := process.New(fieldType.Type, fieldType.Tag, opts.typeRegistry)
+		processor, err := readpipeline.New(fieldType.Type, fieldType.Tag, opts.typeRegistry)
 		if err != nil {
-			return fmt.Errorf("setting up field process %s: %v", currentPath, err)
+			return fmt.Errorf("setting up field readpipeline %s: %v", currentPath, err)
 		}
 
 		// Parse the configured value to produce a raw value

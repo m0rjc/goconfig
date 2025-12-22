@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/m0rjc/goconfig"
-	"github.com/m0rjc/goconfig/process"
 )
 
 type APIKey string
@@ -97,7 +96,7 @@ func main() {
 	// Load configuration with custom validators
 	err := goconfig.Load(context.Background(), &config,
 		// Validate API key format (must start with "sk-" and be at least 20 chars)
-		goconfig.WithCustomType[APIKey](process.NewCustomHandler(
+		goconfig.WithCustomType[APIKey](goconfig.NewCustomHandler(
 			func(rawValue string) (APIKey, error) { return APIKey(rawValue), nil },
 			func(value APIKey) error {
 				key := string(value)
@@ -111,7 +110,7 @@ func main() {
 			})),
 
 		// Validate API endpoint is a valid URL with https
-		goconfig.WithCustomType[APIEndpoint](process.NewCustomHandler(
+		goconfig.WithCustomType[APIEndpoint](goconfig.NewCustomHandler(
 			func(rawValue string) (APIEndpoint, error) { return APIEndpoint(rawValue), nil },
 			func(value APIEndpoint) error {
 				endpoint := string(value)
@@ -122,7 +121,7 @@ func main() {
 			})),
 
 		// Validate database host is not a loopback address in production
-		goconfig.WithCustomType[DatabaseHost](process.NewCustomHandler(
+		goconfig.WithCustomType[DatabaseHost](goconfig.NewCustomHandler(
 			func(rawValue string) (DatabaseHost, error) { return DatabaseHost(rawValue), nil },
 			func(value DatabaseHost) error {
 				host := string(value)

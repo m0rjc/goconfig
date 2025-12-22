@@ -1,11 +1,12 @@
-package process
+package readpipeline
 
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
-func TestBoolTypes(t *testing.T) {
+func TestDurationTypes(t *testing.T) {
 	tests := []struct {
 		name      string
 		fieldType reflect.Type
@@ -15,33 +16,29 @@ func TestBoolTypes(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:      "bool true",
-			fieldType: reflect.TypeOf(true),
-			input:     "true",
-			want:      true,
+			name:      "duration valid",
+			fieldType: reflect.TypeOf(time.Duration(0)),
+			input:     "30s",
+			want:      30 * time.Second,
 		},
 		{
-			name:      "bool 1",
-			fieldType: reflect.TypeOf(true),
-			input:     "1",
-			want:      true,
+			name:      "invalid duration",
+			fieldType: reflect.TypeOf(time.Duration(0)),
+			input:     "foo",
+			wantErr:   true,
 		},
 		{
-			name:      "bool false",
-			fieldType: reflect.TypeOf(true),
-			input:     "false",
-			want:      false,
+			name:      "duration min pass",
+			fieldType: reflect.TypeOf(time.Duration(0)),
+			tags:      `min:"10s"`,
+			input:     "15s",
+			want:      15 * time.Second,
 		},
 		{
-			name:      "bool 0",
-			fieldType: reflect.TypeOf(true),
-			input:     "0",
-			want:      false,
-		},
-		{
-			name:      "invalid bool",
-			fieldType: reflect.TypeOf(true),
-			input:     "notabool",
+			name:      "duration min fail",
+			fieldType: reflect.TypeOf(time.Duration(0)),
+			tags:      `min:"10s"`,
+			input:     "5s",
 			wantErr:   true,
 		},
 	}

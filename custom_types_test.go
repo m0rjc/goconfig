@@ -3,10 +3,8 @@ package goconfig
 import (
 	"context"
 	"errors"
-	"reflect"
+	"strings"
 	"testing"
-
-	"github.com/m0rjc/goconfig/process"
 )
 
 // Explore what can be done with custom types
@@ -24,7 +22,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 		mockParser := func(value string) (CustomStruct, error) {
 			return CustomStruct{Field1: value}, nil
 		}
-		mockHandler := process.NewCustomHandler[CustomStruct](mockParser)
+		mockHandler := NewCustomHandler[CustomStruct](mockParser)
 
 		t.Run("struct as value", func(t *testing.T) {
 			type Config struct {
@@ -83,7 +81,7 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 			return "", false, nil
 		}
 		expectedError := errors.New("expected CustomEnum")
-		mockHandler := process.NewCustomHandler(func(value string) (CustomEnum, error) {
+		mockHandler := NewCustomHandler(func(value string) (CustomEnum, error) {
 			return CustomEnum(value), nil
 		}, func(value CustomEnum) error {
 			if value != CustomEnum1 && value != CustomEnum2 {
@@ -174,19 +172,20 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 		// Modification: must be even
 		t.Run("Adding validator to int", func(t *testing.T) {
 			// Reuse the standard int handler logic and add a validator
-			base := process.NewTypedIntHandler(reflect.TypeOf(int(0)).Bits())
-			mod := process.NewCustomHandler[int](func(s string) (int, error) {
-				v, err := base.GetParser()(s)
-				return int(v), err
-			}, func(v int) error {
+			base := NewTypedIntHandler[int]()
+
+			mod, err := PrependValidators(base, func(v int) error {
 				if v%2 != 0 {
 					return errors.New("must be even")
 				}
 				return nil
 			})
+			if err != nil {
+				t.Fatalf("Failed to create modified handler: %v", err)
+			}
 
 			var cfg Config
-			err := Load(context.Background(), &cfg,
+			err = Load(context.Background(), &cfg,
 				WithKeyStore(mockStore),
 				WithCustomType[int](mod))
 
@@ -204,14 +203,11 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 			err = Load(context.Background(), &cfg,
 				WithKeyStore(mockStoreOdd),
 				WithCustomType[int](mod))
-			if err == nil || !reflect.TypeOf(err).AssignableTo(reflect.TypeOf(&ConfigErrors{})) {
-				t.Fatalf("Expected ConfigErrors, got %v", err)
+			if err == nil {
+				t.Fatal("Expected error")
 			}
-			if !errors.Is(err, errors.New("must be even")) {
-				// ConfigErrors.Error() contains the string
-				if !reflect.ValueOf(err).MethodByName("HasErrors").Call(nil)[0].Bool() {
-					t.Fatal("Expected errors")
-				}
+			if !strings.Contains(err.Error(), "must be even") {
+				t.Errorf("Expected error to contain 'must be even', got %v", err)
 			}
 		})
 	})

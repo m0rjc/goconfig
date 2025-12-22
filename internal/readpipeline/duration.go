@@ -1,4 +1,4 @@
-package process
+package readpipeline
 
 import "time"
 

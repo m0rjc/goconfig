@@ -1,16 +1,11 @@
-package process
+package readpipeline
 
 import (
 	"reflect"
 	"testing"
 )
 
-func TestJsonTypes(t *testing.T) {
-	type Config struct {
-		Name string `json:"name"`
-		Age  int    `json:"age"`
-	}
-
+func TestBoolTypes(t *testing.T) {
 	tests := []struct {
 		name      string
 		fieldType reflect.Type
@@ -20,21 +15,33 @@ func TestJsonTypes(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:      "struct valid",
-			fieldType: reflect.TypeOf(Config{}),
-			input:     `{"name":"Alice","age":30}`,
-			want:      Config{Name: "Alice", Age: 30},
+			name:      "bool true",
+			fieldType: reflect.TypeOf(true),
+			input:     "true",
+			want:      true,
 		},
 		{
-			name:      "map valid",
-			fieldType: reflect.TypeOf(map[string]string{}),
-			input:     `{"foo":"bar"}`,
-			want:      map[string]string{"foo": "bar"},
+			name:      "bool 1",
+			fieldType: reflect.TypeOf(true),
+			input:     "1",
+			want:      true,
 		},
 		{
-			name:      "invalid json",
-			fieldType: reflect.TypeOf(Config{}),
-			input:     `{"name":`,
+			name:      "bool false",
+			fieldType: reflect.TypeOf(true),
+			input:     "false",
+			want:      false,
+		},
+		{
+			name:      "bool 0",
+			fieldType: reflect.TypeOf(true),
+			input:     "0",
+			want:      false,
+		},
+		{
+			name:      "invalid bool",
+			fieldType: reflect.TypeOf(true),
+			input:     "notabool",
 			wantErr:   true,
 		},
 	}
@@ -52,7 +59,7 @@ func TestJsonTypes(t *testing.T) {
 				t.Errorf("Process() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
+			if !tt.wantErr && got != tt.want {
 				t.Errorf("Process() got = %v, want %v", got, tt.want)
 			}
 		})

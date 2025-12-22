@@ -7,8 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-
-	"github.com/m0rjc/goconfig/process"
 )
 
 func TestLoad_Basic(t *testing.T) {
@@ -220,7 +218,7 @@ func TestLoad_Options(t *testing.T) {
 		}
 		var cfg Config
 		// Custom parser for the custom Port type
-		handler := process.NewCustomHandler(func(rawValue string) (Port, error) {
+		handler := NewCustomHandler(func(rawValue string) (Port, error) {
 			return Port(9000), nil
 		})
 
@@ -239,7 +237,7 @@ func TestLoad_Options(t *testing.T) {
 			Port Port `key:"PORT"`
 		}
 		var cfg Config
-		handler := process.NewCustomHandler(func(rawValue string) (Port, error) {
+		handler := NewCustomHandler(func(rawValue string) (Port, error) {
 			v, err := strconv.Atoi(rawValue)
 			return Port(v), err
 		}, func(value Port) error {
@@ -278,7 +276,7 @@ func TestLoad_Errors(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("Failure to instantiate pipeline", func(t *testing.T) {
-		// Use a type that internal/process doesn't support (like a channel)
+		// Use a type that internal/readpipeline doesn't support (like a channel)
 		type Config struct {
 			Chan chan int `key:"CHAN"`
 		}
@@ -290,7 +288,7 @@ func TestLoad_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "setting up field process Chan") {
+		if !strings.Contains(err.Error(), "setting up field readpipeline Chan") {
 			t.Errorf("Expected setup error, got: %v", err)
 		}
 	})
@@ -307,7 +305,7 @@ func TestLoad_Errors(t *testing.T) {
 		}
 		var customCfg CustomConfig
 
-		failingHandler := process.NewCustomHandler(func(rawValue string) (CustomPort, error) {
+		failingHandler := NewCustomHandler(func(rawValue string) (CustomPort, error) {
 			return 0, errors.New("factory failure")
 		})
 
@@ -362,7 +360,7 @@ func TestLoad_Errors(t *testing.T) {
 		if err == nil {
 			t.Fatal("Expected error, got nil")
 		}
-		if !strings.Contains(err.Error(), "setting up field process Inner.Chan") {
+		if !strings.Contains(err.Error(), "setting up field readpipeline Inner.Chan") {
 			t.Errorf("Expected setup error for nested field, got: %v", err)
 		}
 	})

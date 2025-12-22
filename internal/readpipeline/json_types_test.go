@@ -1,12 +1,16 @@
-package process
+package readpipeline
 
 import (
 	"reflect"
 	"testing"
-	"time"
 )
 
-func TestDurationTypes(t *testing.T) {
+func TestJsonTypes(t *testing.T) {
+	type Config struct {
+		Name string `json:"name"`
+		Age  int    `json:"age"`
+	}
+
 	tests := []struct {
 		name      string
 		fieldType reflect.Type
@@ -16,29 +20,21 @@ func TestDurationTypes(t *testing.T) {
 		wantErr   bool
 	}{
 		{
-			name:      "duration valid",
-			fieldType: reflect.TypeOf(time.Duration(0)),
-			input:     "30s",
-			want:      30 * time.Second,
+			name:      "struct valid",
+			fieldType: reflect.TypeOf(Config{}),
+			input:     `{"name":"Alice","age":30}`,
+			want:      Config{Name: "Alice", Age: 30},
 		},
 		{
-			name:      "invalid duration",
-			fieldType: reflect.TypeOf(time.Duration(0)),
-			input:     "foo",
-			wantErr:   true,
+			name:      "map valid",
+			fieldType: reflect.TypeOf(map[string]string{}),
+			input:     `{"foo":"bar"}`,
+			want:      map[string]string{"foo": "bar"},
 		},
 		{
-			name:      "duration min pass",
-			fieldType: reflect.TypeOf(time.Duration(0)),
-			tags:      `min:"10s"`,
-			input:     "15s",
-			want:      15 * time.Second,
-		},
-		{
-			name:      "duration min fail",
-			fieldType: reflect.TypeOf(time.Duration(0)),
-			tags:      `min:"10s"`,
-			input:     "5s",
+			name:      "invalid json",
+			fieldType: reflect.TypeOf(Config{}),
+			input:     `{"name":`,
 			wantErr:   true,
 		},
 	}
@@ -56,7 +52,7 @@ func TestDurationTypes(t *testing.T) {
 				t.Errorf("Process() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if !tt.wantErr && got != tt.want {
+			if !tt.wantErr && !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Process() got = %v, want %v", got, tt.want)
 			}
 		})
