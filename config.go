@@ -174,8 +174,14 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
-		// Skip unexported fields
+		// Get the key tag
+		key := fieldType.Tag.Get("key")
+
+		// Skip unexported fields, but error if they have a key tag
 		if !field.CanSet() {
+			if key != "" {
+				return fmt.Errorf("field %s is unexported but has a key tag", fieldType.Name)
+			}
 			continue
 		}
 
@@ -185,12 +191,18 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 			currentPath = fieldPath + "." + fieldType.Name
 		}
 
-		// Get the key tag
-		key := fieldType.Tag.Get("key")
 		if key == "" {
-			// If it's a struct then recurse into it
-			if field.Kind() == reflect.Struct {
-				if err := loadStruct(ctx, field, currentPath, opts, errors); err != nil {
+			// If it's a struct or pointer to struct then recurse into it
+			effectiveField := field
+			if field.Kind() == reflect.Ptr {
+				if field.IsNil() && field.Type().Elem().Kind() == reflect.Struct {
+					field.Set(reflect.New(field.Type().Elem()))
+				}
+				effectiveField = field.Elem()
+			}
+
+			if effectiveField.Kind() == reflect.Struct {
+				if err := loadStruct(ctx, effectiveField, currentPath, opts, errors); err != nil {
 					return err
 				}
 			}
@@ -277,6 +289,8 @@ func setField(field reflect.Value, value any, key string, errors *ConfigErrors) 
 		// Assign the pointer to the field
 		field.Set(ptr)
 	} else {
+		// This is unexpected because our pipeline setup system should always ensure that we have a pipeline
+		// that is compatible with the target field.
 		errors.Add(key, fmt.Errorf("value of type %s cannot be converted to %s", val.Type(), fieldType))
 	}
 }
