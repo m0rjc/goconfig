@@ -135,4 +135,24 @@ func TestCustomParserAndValidators(t *testing.T) {
 			t.Errorf("p(10) = %v, %v, want 10, nil", got, err)
 		}
 	})
+
+	t.Run("Custom parser for non-built-in type", func(t *testing.T) {
+		// Build a parser for a complex number and run it through the pipeline
+		customParser := func(rawValue string) (any, error) {
+			return complex(1, 2), nil
+		}
+		fieldType := reflect.TypeOf(complex(0, 0))
+		p, err := New(fieldType, "", customParser, nil)
+		if err != nil {
+			t.Fatalf("Failed to create processor: %v", err)
+		}
+
+		value, err := p("This value is ignored by the mock parser")
+		if err != nil {
+			t.Errorf("Unexpected error: %v", err)
+		}
+		if value != complex(1, 2) {
+			t.Errorf("Expected complex(1, 2), got %v", value)
+		}
+	})
 }
