@@ -6,7 +6,7 @@ import (
 )
 
 func NewBoolHandler(_ reflect.Type) PipelineBuilder {
-	return NewTypedBoolHandler()
+	return WrapTypedHandler(NewTypedBoolHandler())
 }
 
 // NewTypedBoolHandler returns a TypedHandler[bool] that uses standard bool parsing and validation.

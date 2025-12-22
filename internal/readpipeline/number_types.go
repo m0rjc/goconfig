@@ -6,15 +6,15 @@ import (
 )
 
 func NewIntHandler(fieldType reflect.Type) PipelineBuilder {
-	return NewTypedIntHandler(fieldType.Bits())
+	return WrapTypedHandler(NewTypedIntHandler(fieldType.Bits()))
 }
 
 func NewUintHandler(fieldType reflect.Type) PipelineBuilder {
-	return NewTypedUintHandler(fieldType.Bits())
+	return WrapTypedHandler(NewTypedUintHandler(fieldType.Bits()))
 }
 
 func NewFloatHandler(fieldType reflect.Type) PipelineBuilder {
-	return NewTypedFloatHandler(fieldType.Bits())
+	return WrapTypedHandler(NewTypedFloatHandler(fieldType.Bits()))
 }
 
 // NewTypedIntHandler returns a TypedHandler[int64] that uses standard int parsing and validation.

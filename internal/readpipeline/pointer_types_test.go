@@ -96,7 +96,7 @@ func TestPointerTypes(t *testing.T) {
 		}
 
 		registry := NewDefaultTypeRegistry()
-		registry.RegisterType(reflect.TypeOf(Point{}), NewCustomHandler(customParser))
+		registry.RegisterType(reflect.TypeOf(Point{}), WrapTypedHandler(NewCustomHandler(customParser)))
 
 		processor, err := New(fieldType, "", registry)
 		if err != nil {

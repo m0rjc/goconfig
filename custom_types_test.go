@@ -3,23 +3,16 @@ package goconfig
 import (
 	"context"
 	"errors"
-	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 )
 
-// NonConvertibleHandler is a TypedHandler[string] that returns an int from Build
-type NonConvertibleHandler struct{}
-
-func (n NonConvertibleHandler) GetParser() FieldProcessor[string] { return nil }
-func (n NonConvertibleHandler) GetWrapper() Wrapper[string]       { return nil }
-func (n NonConvertibleHandler) Build(tags reflect.StructTag) (FieldProcessor[any], error) {
-	return func(rawValue string) (any, error) {
-		return struct{ A int }{A: 123}, nil // Returns a struct instead of string
-	}, nil
-}
+// NonConvertibleHandler can no longer trigger the error by returning an incorrect type from Build
+// because Build is now handled by the library's adapter which always calls the strongly-typed parser.
+// If we want to test that the conversion error can STILL happen (e.g. if internal code is buggy),
+// we would need a different way, but the goal was to PREVENT it by removing Build from the public interface.
 
 // Explore what can be done with custom types
 func TestLoad_WithCustomTypes(t *testing.T) {
@@ -313,29 +306,6 @@ func TestLoad_WithCustomTypes(t *testing.T) {
 					t.Errorf("Expected range validation error, got %v", err)
 				}
 			})
-		})
-
-		t.Run("Triggering type conversion error at assignment", func(t *testing.T) {
-			// This test demonstrates how it is possible to trigger the error at line 193 in config.go
-			// by providing a custom TypedHandler that returns an incorrect type from its Build method.
-			type Config struct {
-				Value string `key:"VAL"`
-			}
-			mockStore := func(ctx context.Context, key string) (string, bool, error) {
-				return "anything", true, nil
-			}
-
-			var cfg Config
-			err := Load(context.Background(), &cfg,
-				WithKeyStore(mockStore),
-				WithCustomType[string](NonConvertibleHandler{}))
-
-			if err == nil {
-				t.Fatal("Expected error")
-			}
-			if !strings.Contains(err.Error(), "cannot be converted to string") {
-				t.Errorf("Expected conversion error, got: %v", err)
-			}
 		})
 
 		t.Run("Standard typed handlers", func(t *testing.T) {

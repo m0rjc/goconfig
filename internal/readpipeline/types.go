@@ -21,9 +21,6 @@ type TypedHandler[T any] interface {
 	// GetWrapper returns a Wrapper[T] that adds validators to the pipeline based on tags.
 	// It can return nil if no validation is needed.
 	GetWrapper() Wrapper[T]
-	// Build creates the final FieldProcessor[any] for the given tags.
-	// This causes any TypedHandler to implement the untyped PipelineBuilder interface.
-	Build(tags reflect.StructTag) (FieldProcessor[any], error)
 }
 
 // PipelineBuilder is the typeless interface used to build the read pipeline.

@@ -13,9 +13,7 @@ type Validator[T any] = readpipeline.Validator[T]
 
 type Wrapper[T any] = readpipeline.Wrapper[T]
 
-type TypedHandler[T any] interface {
-	readpipeline.TypedHandler[T]
-}
+type TypedHandler[T any] = readpipeline.TypedHandler[T]
 
 func NewCustomHandler[T any](customParser FieldProcessor[T], customValidators ...Validator[T]) TypedHandler[T] {
 	return readpipeline.NewCustomHandler(customParser, customValidators...)

@@ -23,7 +23,7 @@ func WithCustomType[T any](handler TypedHandler[T]) Option {
 	t := reflect.TypeOf(typedNil).Elem()
 
 	return func(opts *loadOptions) {
-		opts.typeRegistry.RegisterType(t, handler)
+		opts.typeRegistry.RegisterType(t, readpipeline.WrapTypedHandler(handler))
 	}
 }
 

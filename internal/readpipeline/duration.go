@@ -2,7 +2,7 @@ package readpipeline
 
 import "time"
 
-var durationTypeHandler = NewTypedDurationHandler()
+var durationTypeHandler = WrapTypedHandler(NewTypedDurationHandler())
 
 // NewTypedDurationHandler returns a TypedHandler[time.Duration] that uses standard duration parsing and validation.
 func NewTypedDurationHandler() TypedHandler[time.Duration] {

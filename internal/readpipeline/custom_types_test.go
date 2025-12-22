@@ -33,7 +33,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 		fieldType := reflect.TypeOf(int64(0))
 
 		registry := NewDefaultTypeRegistry()
-		registry.RegisterType(fieldType, typeHandlerImpl[int64]{
+		registry.RegisterType(fieldType, WrapTypedHandler(typeHandlerImpl[int64]{
 			Parser: func(s string) (int64, error) {
 				v, err := customParser(s)
 				if err != nil {
@@ -47,7 +47,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 				},
 				WrapProcessUsingRangeTags[int64],
 			),
-		})
+		}))
 
 		p, err := New(fieldType, tags, registry)
 		if err != nil {
@@ -103,7 +103,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 
 		fieldType := reflect.TypeOf(Point{})
 		registry := NewDefaultTypeRegistry()
-		registry.RegisterType(fieldType, NewCustomHandler(func(s string) (Point, error) {
+		registry.RegisterType(fieldType, WrapTypedHandler(NewCustomHandler(func(s string) (Point, error) {
 			v, err := customParser(s)
 			if err != nil {
 				return Point{}, err
@@ -111,7 +111,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 			return v.(Point), nil
 		}, func(v Point) error {
 			return customValidator(v)
-		}))
+		})))
 		p, err := New(fieldType, "", registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
@@ -156,7 +156,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to prepend validator: %v", err)
 		}
-		registry.RegisterType(fieldType, handler)
+		registry.RegisterType(fieldType, WrapTypedHandler(handler))
 		p, err := New(fieldType, "", registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
@@ -177,10 +177,10 @@ func TestCustomParserAndValidators(t *testing.T) {
 		}
 		fieldType := reflect.TypeOf(complex(0, 0))
 		registry := NewDefaultTypeRegistry()
-		registry.RegisterType(fieldType, NewCustomHandler(func(s string) (complex128, error) {
+		registry.RegisterType(fieldType, WrapTypedHandler(NewCustomHandler(func(s string) (complex128, error) {
 			v, err := customParser(s)
 			return v.(complex128), err
-		}))
+		})))
 		p, err := New(fieldType, "", registry)
 		if err != nil {
 			t.Fatalf("Failed to create processor: %v", err)
@@ -207,7 +207,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 				t.Fatalf("ReplaceParser failed: %v", err)
 			}
 
-			p, err := decorated.Build("")
+			p, err := WrapTypedHandler(decorated).Build("")
 			if err != nil {
 				t.Fatalf("Build failed: %v", err)
 			}
@@ -235,7 +235,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 
 			// tags with min=10
 			tags := reflect.StructTag(`min:"10"`)
-			p, err := decorated.Build(tags)
+			p, err := WrapTypedHandler(decorated).Build(tags)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -281,7 +281,7 @@ func TestCustomParserAndValidators(t *testing.T) {
 				return nil
 			})
 
-			p, _ := handler2.Build("")
+			p, _ := WrapTypedHandler(handler2).Build("")
 			if _, err := p("-2"); err == nil || !strings.Contains(err.Error(), "must be positive") {
 				t.Errorf("expected positive error, got %v", err)
 			}

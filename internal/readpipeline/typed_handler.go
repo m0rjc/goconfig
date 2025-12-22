@@ -19,13 +19,18 @@ func (h typeHandlerImpl[T]) GetWrapper() Wrapper[T] {
 	return h.ValidationWrapper
 }
 
-func (h typeHandlerImpl[T]) Build(tags reflect.StructTag) (FieldProcessor[any], error) {
-	pipeline := h.GetParser()
+// typedHandlerAdapter adapts a TypedHandler[T] to a PipelineBuilder.
+type typedHandlerAdapter[T any] struct {
+	Handler TypedHandler[T]
+}
+
+func (a typedHandlerAdapter[T]) Build(tags reflect.StructTag) (FieldProcessor[any], error) {
+	pipeline := a.Handler.GetParser()
 	if pipeline == nil {
 		return nil, nil // Return nil if no parser is provided (modification handler)
 	}
 
-	wrapper := h.GetWrapper()
+	wrapper := a.Handler.GetWrapper()
 	if wrapper != nil {
 		var err error
 		pipeline, err = wrapper(tags, pipeline)
@@ -33,17 +38,14 @@ func (h typeHandlerImpl[T]) Build(tags reflect.StructTag) (FieldProcessor[any], 
 			return nil, err
 		}
 	}
-	return typedToUntypedPipeline(pipeline), nil
+	return func(rawValue string) (any, error) {
+		return pipeline(rawValue)
+	}, nil
 }
 
-// typedToUntypedPipeline converts from the strongly typed world of the typeHandlerImpl to the weak type world of the readpipeline pipeline.
-func typedToUntypedPipeline[T any](parser FieldProcessor[T]) FieldProcessor[any] {
-	if parser == nil {
-		return nil
-	}
-	return func(rawValue string) (any, error) {
-		return parser(rawValue)
-	}
+// WrapTypedHandler wraps a TypedHandler[T] as a PipelineBuilder.
+func WrapTypedHandler[T any](handler TypedHandler[T]) PipelineBuilder {
+	return typedHandlerAdapter[T]{Handler: handler}
 }
 
 // Pipe combines a processor and a Validator, adding validation to the processor

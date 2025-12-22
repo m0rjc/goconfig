@@ -7,7 +7,7 @@ import (
 // NewStringHandler returns a PipelineBuilder that simply returns the raw value.
 // Strings support the min and max tags for lexical ordering and the pattern tag for regex
 func NewStringHandler(_ reflect.Type) PipelineBuilder {
-	return NewTypedStringHandler()
+	return WrapTypedHandler(NewTypedStringHandler())
 }
 
 // NewTypedStringHandler returns a TypedHandler[string] that uses standard string parsing and validation.
