@@ -4,22 +4,12 @@ import (
 	"context"
 	"fmt"
 	"reflect"
+
+	"github.com/m0rjc/goconfig/internal/process"
 )
 
 // Option is a functional option for configuring the Load function.
 type Option func(*loadOptions)
-
-// loadOptions holds the configuration options for Load.
-type loadOptions struct {
-	// parsers allows the parser for a given key to be overridden
-	parsers map[string]Parser // key is fieldPath
-	// keyStore reads the values. Default to os.GetEnv()
-	keyStore KeyStore
-	// validatorFactories provide validators for a field
-	validatorFactories []ValidatorFactory
-	// validators maps field paths to their validator functions
-	validators map[string][]Validator
-}
 
 // WithValidatorFactory registers a custom validator factory.
 // Validator factories inspect struct fields and automatically register validators
@@ -51,16 +41,6 @@ type loadOptions struct {
 func WithValidatorFactory(factory ValidatorFactory) Option {
 	return func(opts *loadOptions) {
 		opts.addValidatorFactory(factory)
-	}
-}
-
-// withoutBuiltinValidators removes the builtin validators.
-// This option must be supplied first.
-// This option is intended for unit testing to allow the test code to isolate the
-// validation component.
-func withoutBuiltinValidators() Option {
-	return func(opts *loadOptions) {
-		opts.validatorFactories = make([]ValidatorFactory, 0)
 	}
 }
 
@@ -96,6 +76,8 @@ func WithParser(path string, parser Parser) Option {
 	}
 }
 
+type Parser = process.FieldProcessor[any]
+
 // WithKeyStore replaces the environment variable keystore with an alternative.
 // Use this to read from other sources such as a database or properties file.
 func WithKeyStore(keyStore KeyStore) Option {
@@ -109,7 +91,7 @@ func newLoadOptions() *loadOptions {
 	return &loadOptions{
 		keyStore:           EnvironmentKeyStore,
 		parsers:            make(map[string]Parser),
-		validatorFactories: []ValidatorFactory{builtinValidatorFactory},
+		validatorFactories: make([]ValidatorFactory, 0),
 		validators:         make(map[string][]Validator),
 	}
 }
@@ -192,8 +174,14 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 		field := v.Field(i)
 		fieldType := t.Field(i)
 
-		// Skip unexported fields
+		// Get the key tag
+		key := fieldType.Tag.Get("key")
+
+		// Skip unexported fields, but error if they have a key tag
 		if !field.CanSet() {
+			if key != "" {
+				return fmt.Errorf("field %s is unexported but has a key tag", fieldType.Name)
+			}
 			continue
 		}
 
@@ -203,12 +191,18 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 			currentPath = fieldPath + "." + fieldType.Name
 		}
 
-		// Get the key tag
-		key := fieldType.Tag.Get("key")
 		if key == "" {
-			// If it's a struct then recurse into it
-			if field.Kind() == reflect.Struct {
-				if err := loadStruct(ctx, field, currentPath, opts, errors); err != nil {
+			// If it's a struct or pointer to struct then recurse into it
+			effectiveField := field
+			if field.Kind() == reflect.Ptr {
+				if field.IsNil() && field.Type().Elem().Kind() == reflect.Struct {
+					field.Set(reflect.New(field.Type().Elem()))
+				}
+				effectiveField = field.Elem()
+			}
+
+			if effectiveField.Kind() == reflect.Struct {
+				if err := loadStruct(ctx, effectiveField, currentPath, opts, errors); err != nil {
 					return err
 				}
 			}
@@ -236,23 +230,26 @@ func loadStruct(ctx context.Context, v reflect.Value, fieldPath string, opts *lo
 			continue
 		}
 
-		// Parse the configured value to produce a raw value
-		rawValue, err := parseValue(configuredValue, currentPath, field, opts)
+		// Configure the processor, then run it
+		customParser := opts.getCustomParser(currentPath)
+		customValidators, err := opts.getCustomValidators(currentPath, fieldType)
 		if err != nil {
-			errors.Add(key, fmt.Errorf("error parsing value: %w", err))
+			return fmt.Errorf("custom validators for field %s: %w", currentPath, err)
+		}
+
+		processor, err := process.New(fieldType.Type, fieldType.Tag, customParser, customValidators)
+		if err != nil {
+			return fmt.Errorf("setting up field process %s: %v", currentPath, err)
+		}
+
+		// Parse the configured value to produce a raw value
+		rawValue, err := processor(configuredValue)
+		if err != nil {
+			errors.Add(key, err)
 			continue
 		}
 
-		// Validate the raw value
-		ok, err := validate(rawValue, key, currentPath, fieldType, opts, errors)
-		if err != nil {
-			return err
-		}
-
-		// Set the field value based on its type
-		if ok {
-			setField(field, rawValue, key, errors)
-		}
+		setField(field, rawValue, key, errors)
 	}
 
 	return nil
@@ -276,7 +273,7 @@ func getConfiguredValue(ctx context.Context, tag reflect.StructTag, key string, 
 	return "", false, nil
 }
 
-// setField sets a field value based on its type
+// setField sets a field value based on its type. It automatically handles pointer fields
 func setField(field reflect.Value, value any, key string, errors *ConfigErrors) {
 	// Set the field after validation passes
 	val := reflect.ValueOf(value)
@@ -284,28 +281,16 @@ func setField(field reflect.Value, value any, key string, errors *ConfigErrors) 
 
 	if val.Type().ConvertibleTo(fieldType) {
 		field.Set(val.Convert(fieldType))
+	} else if fieldType.Kind() == reflect.Ptr && val.Type().ConvertibleTo(fieldType.Elem()) {
+		// Create a new pointer of the required type
+		ptr := reflect.New(fieldType.Elem())
+		// Dereference the pointer and set the converted value
+		ptr.Elem().Set(val.Convert(fieldType.Elem()))
+		// Assign the pointer to the field
+		field.Set(ptr)
 	} else {
+		// This is unexpected because our pipeline setup system should always ensure that we have a pipeline
+		// that is compatible with the target field.
 		errors.Add(key, fmt.Errorf("value of type %s cannot be converted to %s", val.Type(), fieldType))
 	}
-}
-
-func (opts *loadOptions) addValidator(fieldPath string, validator Validator) {
-	if opts.validators == nil {
-		opts.validators = make(map[string][]Validator)
-	}
-	opts.validators[fieldPath] = append(opts.validators[fieldPath], validator)
-}
-
-func (opts *loadOptions) addValidatorFactory(factory ValidatorFactory) {
-	if opts.validatorFactories == nil {
-		opts.validatorFactories = make([]ValidatorFactory, 0, 1)
-	}
-	opts.validatorFactories = append(opts.validatorFactories, factory)
-}
-
-func (opts *loadOptions) addParser(path string, parser Parser) {
-	if opts.parsers == nil {
-		opts.parsers = make(map[string]Parser)
-	}
-	opts.parsers[path] = parser
 }
