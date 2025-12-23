@@ -109,7 +109,7 @@ func TestIntTypes(t *testing.T) {
 		},
 	}
 
-	registry := NewDefaultTypeRegistry()
+	registry := NewTypeRegistry()
 	t.Run("invalid min tag", func(t *testing.T) {
 		_, err := New(reflect.TypeOf(int(0)), `min:"foo"`, registry)
 		if err == nil {
@@ -214,7 +214,7 @@ func TestUintTypes(t *testing.T) {
 		},
 	}
 
-	registry := NewDefaultTypeRegistry()
+	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			proc, err := New(tt.fieldType, tt.tags, registry)
@@ -264,7 +264,7 @@ func TestFloatTypes(t *testing.T) {
 		},
 	}
 
-	registry := NewDefaultTypeRegistry()
+	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			proc, err := New(tt.fieldType, tt.tags, registry)

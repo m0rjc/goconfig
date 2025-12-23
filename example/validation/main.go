@@ -14,6 +14,7 @@ import (
 )
 
 type APIKey string
+
 type APIEndpoint string
 type DatabaseHost string
 
@@ -96,7 +97,7 @@ func main() {
 	// Load configuration with custom validators
 	err := goconfig.Load(context.Background(), &config,
 		// Validate API key format (must start with "sk-" and be at least 20 chars)
-		goconfig.WithCustomType[APIKey](goconfig.NewCustomHandler(
+		goconfig.WithCustomType[APIKey](goconfig.NewCustomType(
 			func(rawValue string) (APIKey, error) { return APIKey(rawValue), nil },
 			func(value APIKey) error {
 				key := string(value)
@@ -110,7 +111,7 @@ func main() {
 			})),
 
 		// Validate API endpoint is a valid URL with https
-		goconfig.WithCustomType[APIEndpoint](goconfig.NewCustomHandler(
+		goconfig.WithCustomType[APIEndpoint](goconfig.NewCustomType(
 			func(rawValue string) (APIEndpoint, error) { return APIEndpoint(rawValue), nil },
 			func(value APIEndpoint) error {
 				endpoint := string(value)
@@ -121,7 +122,7 @@ func main() {
 			})),
 
 		// Validate database host is not a loopback address in production
-		goconfig.WithCustomType[DatabaseHost](goconfig.NewCustomHandler(
+		goconfig.WithCustomType[DatabaseHost](goconfig.NewCustomType(
 			func(rawValue string) (DatabaseHost, error) { return DatabaseHost(rawValue), nil },
 			func(value DatabaseHost) error {
 				host := string(value)

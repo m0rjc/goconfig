@@ -32,14 +32,14 @@ type loadOptions struct {
 	// keyStore reads the values. Default to os.GetEnv()
 	keyStore KeyStore
 	// typeRegistry holds the handlers for specific types
-	typeRegistry *readpipeline.TypeRegistry
+	typeRegistry readpipeline.TypeRegistry
 }
 
 // newLoadOptions creates default load options.
 func newLoadOptions() *loadOptions {
 	return &loadOptions{
 		keyStore:     EnvironmentKeyStore,
-		typeRegistry: readpipeline.NewDefaultTypeRegistry(),
+		typeRegistry: readpipeline.NewTypeRegistry(),
 	}
 }
 

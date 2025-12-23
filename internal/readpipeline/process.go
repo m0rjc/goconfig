@@ -9,7 +9,7 @@ import (
 // validators.
 // If the target type is a pointer, it will be unboxed before processing. The output of the readpipeline chain is the value.
 // The caller is responsible for assigning the value to the struct field, dealing with pointers as needed.
-func New(fieldType reflect.Type, tags reflect.StructTag, registry *TypeRegistry) (FieldProcessor[any], error) {
+func New(fieldType reflect.Type, tags reflect.StructTag, registry TypeRegistry) (FieldProcessor[any], error) {
 	targetType := fieldType
 	isPointer := fieldType.Kind() == reflect.Ptr
 

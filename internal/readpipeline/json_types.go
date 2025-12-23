@@ -5,8 +5,8 @@ import (
 	"reflect"
 )
 
-func NewJsonHandler(targetType reflect.Type) PipelineBuilder {
-	return WrapTypedHandler(typeHandlerImpl[any]{
+func NewJsonPipelineBuilder(targetType reflect.Type) TypedHandler[any] {
+	return &typeHandlerImpl[any]{
 		Parser: func(rawValue string) (any, error) {
 			ptr := reflect.New(targetType).Interface()
 			err := json.Unmarshal([]byte(rawValue), ptr)
@@ -22,5 +22,5 @@ func NewJsonHandler(targetType reflect.Type) PipelineBuilder {
 		ValidationWrapper: func(tags reflect.StructTag, inputProcess FieldProcessor[any]) (FieldProcessor[any], error) {
 			return inputProcess, nil
 		},
-	})
+	}
 }

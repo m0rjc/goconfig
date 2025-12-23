@@ -7,7 +7,7 @@ import (
 
 func TestInvalidTypes(t *testing.T) {
 	// This test will need to be removed or replaced if we ever support complex numbers
-	registry := NewDefaultTypeRegistry()
+	registry := NewTypeRegistry()
 	t.Run("Complex128", func(t *testing.T) {
 		fieldType := reflect.TypeOf(complex128(0))
 		tags := reflect.StructTag("")

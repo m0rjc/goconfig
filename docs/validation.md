@@ -346,7 +346,7 @@ func main() {
 
 ### Adding Validators to Built-in Types
 
-Use `PrependValidators()` to add custom validation to built-in types while keeping their tag validation:
+Use `AddValidators()` to add custom validation to built-in types while keeping their tag validation:
 
 ```go
 type Config struct {
@@ -360,7 +360,7 @@ func main() {
     baseHandler := goconfig.NewTypedIntHandler[int]()
 
     // Add custom validator (port must be even)
-    evenIntHandler, err := goconfig.PrependValidators(baseHandler, func(v int) error {
+    evenIntHandler, err := goconfig.AddValidators(baseHandler, func(v int) error {
         if v%2 != 0 {
             return errors.New("must be even")
         }

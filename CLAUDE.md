@@ -100,10 +100,10 @@ customHandler, err := goconfig.ReplaceParser(baseHandler, func(rawValue string) 
 })
 ```
 
-**PrependValidators()** - Add validators to an existing handler:
+**AddValidators()** - Add validators to an existing handler:
 ```go
 baseHandler := goconfig.NewTypedIntHandler[int]()
-validatedHandler, err := goconfig.PrependValidators(baseHandler, func(v int) error {
+validatedHandler, err := goconfig.AddValidators(baseHandler, func(v int) error {
     if v%2 != 0 {
         return errors.New("must be even")
     }
@@ -201,7 +201,7 @@ err := goconfig.Load(ctx, &cfg,
 1. **Type-based vs Field-based**: Old system used field names ("APIKey"), new system uses types (APIKey)
 2. **Type safety**: New system uses generics for compile-time type safety
 3. **Reusability**: Custom types can be reused across multiple fields automatically
-4. **Composability**: New system provides `ReplaceParser()`, `PrependValidators()`, etc. for composing handlers
+4. **Composability**: New system provides `ReplaceParser()`, `AddValidators()`, etc. for composing handlers
 
 ## Common Patterns
 
@@ -257,7 +257,7 @@ err := goconfig.Load(ctx, &config,
 ```go
 // Make all ints even
 baseHandler := goconfig.NewTypedIntHandler[int]()
-evenHandler, _ := goconfig.PrependValidators(baseHandler, func(v int) error {
+evenHandler, _ := goconfig.AddValidators(baseHandler, func(v int) error {
     if v%2 != 0 {
         return errors.New("must be even")
     }

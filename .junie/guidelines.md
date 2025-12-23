@@ -59,7 +59,7 @@ func TestExampleLoad(t *testing.T) {
   - `Wrapper[T]`: A factory that wraps a `FieldProcessor` with validation based on struct tags.
 - **Type Registration**: Type-specific logic is registered in `internal/readpipeline/typeregistry.go`. To add support for a new type, implement a `PipelineBuilder` (often via `WrapTypedHandler`) and register it in `kindHandlers` or `specialTypeHandlers`.
 - **Validation**: Validation is integrated into the processing pipeline. The `Pipe` and `PipeMultiple` functions in `internal/readpipeline/typed_handler.go` are used to chain validators to processors.
-- **Custom Types**: Users can register custom handlers using `goconfig.WithHandler`. Built-in factories like `NewCustomHandler`, `NewEnumHandler`, `ReplaceParser`, and `PrependValidators` are available.
+- **Custom Types**: Users can register custom handlers using `goconfig.WithHandler`. Built-in factories like `NewCustomHandler`, `NewEnumHandler`, `ReplaceParser`, and `AddValidators` are available.
 - **Struct Tags**:
   - `key`: The name of the environment variable/key in the store.
   - `default`: Default value if the key is missing.

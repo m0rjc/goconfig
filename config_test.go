@@ -218,7 +218,7 @@ func TestLoad_Options(t *testing.T) {
 		}
 		var cfg Config
 		// Custom parser for the custom Port type
-		handler := NewCustomHandler(func(rawValue string) (Port, error) {
+		handler := NewCustomType(func(rawValue string) (Port, error) {
 			return Port(9000), nil
 		})
 
@@ -237,7 +237,7 @@ func TestLoad_Options(t *testing.T) {
 			Port Port `key:"PORT"`
 		}
 		var cfg Config
-		handler := NewCustomHandler(func(rawValue string) (Port, error) {
+		handler := NewCustomType(func(rawValue string) (Port, error) {
 			v, err := strconv.Atoi(rawValue)
 			return Port(v), err
 		}, func(value Port) error {
@@ -305,7 +305,7 @@ func TestLoad_Errors(t *testing.T) {
 		}
 		var customCfg CustomConfig
 
-		failingHandler := NewCustomHandler(func(rawValue string) (CustomPort, error) {
+		failingHandler := NewCustomType(func(rawValue string) (CustomPort, error) {
 			return 0, errors.New("factory failure")
 		})
 
