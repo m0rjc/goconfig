@@ -39,15 +39,13 @@ The library has built-in support for:
 - Pointers: All above types as pointers
 - Nested structs
 
-### 3. Custom Type System
+### 3. Custom Type System - Building Block Approach
 
-The new type system (replaced the old parser/validator system) uses typed handlers registered per type.
+The custom type system uses a **building block architecture** where you compose simple, reusable components to create type handlers. This approach replaced the old parser/validator system and provides maximum flexibility through composition.
 
-#### Key Types
+#### Core Building Blocks
 
-**TypedHandler[T]** - A handler that knows how to parse and validate values of type T
-- Has a parser: `FieldProcessor[T]` (converts string to T)
-- Has a validation wrapper: `Wrapper[T]` (adds validation stages)
+**TypedHandler[T]** - A handler that knows how to parse and validate values of type T. Handlers are built by combining building blocks.
 
 **FieldProcessor[T]** - A function that converts a string to type T:
 ```go
@@ -59,75 +57,60 @@ type FieldProcessor[T any] func(rawValue string) (T, error)
 type Validator[T any] func(value T) error
 ```
 
-**Wrapper[T]** - A factory that wraps a FieldProcessor with validation:
+**Wrapper[T]** - A factory that wraps a FieldProcessor to add behavior (like validation):
 ```go
 type Wrapper[T any] func(tags reflect.StructTag, inputProcess FieldProcessor[T]) (FieldProcessor[T], error)
 ```
 
-#### Creating Custom Type Handlers
+#### Building Block Functions
 
-**NewCustomHandler[T]()** - Create a handler with custom parsing and validation:
-```go
-handler := goconfig.NewCustomHandler(
-    func(rawValue string) (APIKey, error) {
-        return APIKey(rawValue), nil
-    },
-    func(value APIKey) error {
-        if !strings.HasPrefix(string(value), "sk-") {
-            return fmt.Errorf("API key must start with 'sk-'")
-        }
-        return nil
-    },
-)
-```
+These are the core building blocks you compose to create custom types:
 
-**NewEnumHandler[T]()** - Create a handler for enum types:
-```go
-type Status string
-const (
-    StatusActive Status = "active"
-    StatusInactive Status = "inactive"
-)
-handler := goconfig.NewEnumHandler(StatusActive, StatusInactive)
-```
+**NewCustomType[T](parser, validators...)** - Start with a parser and add validators
+- Creates a complete handler from a parser function and optional validators
+- This is the most common way to create custom types
 
-**ReplaceParser()** - Replace the parser while keeping validators:
-```go
-baseHandler := goconfig.NewTypedIntHandler[int]()
-customHandler, err := goconfig.ReplaceParser(baseHandler, func(rawValue string) (int, error) {
-    v, err := strconv.Atoi(rawValue)
-    return v * 2, err  // Example: multiply by 2
-})
-```
+**AddValidators[T](handler, validators...)** - Add validators to an existing handler
+- Takes any handler and wraps it with additional validators
+- Useful for extending built-in type handlers
 
-**AddValidators()** - Add validators to an existing handler:
-```go
-baseHandler := goconfig.NewTypedIntHandler[int]()
-validatedHandler, err := goconfig.AddValidators(baseHandler, func(v int) error {
-    if v%2 != 0 {
-        return errors.New("must be even")
-    }
-    return nil
-})
-```
+**AddDynamicValidation[T](handler, wrapper)** - Add dynamic validation that reads struct tags
+- Adds a wrapper that can read struct tags and customize behavior per field
+- For advanced scenarios where validation depends on struct tags
 
-#### Standard Type Handlers
+**CastCustomType[T, U](handler)** - Transform a handler from type T to type U
+- Uses Go's type conversion rules to transform between compatible types
+- Useful for creating handlers for type aliases (e.g., `type Port int`)
 
-For extending built-in types with custom validation:
-- `NewTypedStringHandler()` - Returns `TypedHandler[string]`
-- `NewTypedIntHandler[T]()` - Returns `TypedHandler[T]` for int types
-- `NewTypedUintHandler[T]()` - Returns `TypedHandler[T]` for uint types
-- `NewTypedFloatHandler[T]()` - Returns `TypedHandler[T]` for float types
-- `NewTypedDurationHandler()` - Returns `TypedHandler[time.Duration]`
+**NewStringEnumType[T](values...)** - Create an enum validator for string-based types
+- Specialized builder for string enum types
+- Automatically validates that values match one of the provided options
+
+#### Default Type Handlers
+
+These provide base handlers for built-in types that you can extend:
+- `DefaultStringType()` - Returns `TypedHandler[string]`
+- `DefaultIntegerType[T]()` - Returns `TypedHandler[T]` for int types (int, int8, int16, int32, int64)
+- `DefaultUnsignedIntegerType[T]()` - Returns `TypedHandler[T]` for uint types (uint, uint8, uint16, uint32, uint64)
+- `DefaultFloatIntegerType[T]()` - Returns `TypedHandler[T]` for float types (float32, float64)
+- `DefaultDurationType()` - Returns `TypedHandler[time.Duration]`
+
+These handlers already include tag-based validation (min, max, pattern). Use them as building blocks to add custom validation.
 
 #### Registering Custom Types
 
-Use `WithCustomType[T]()` to register a handler:
+Use `WithCustomType[T]()` to register a handler when loading config:
 ```go
 err := goconfig.Load(ctx, &config,
     goconfig.WithCustomType[APIKey](apiKeyHandler),
     goconfig.WithCustomType[Status](statusHandler),
 )
+```
+
+Or use `RegisterCustomType[T]()` to register globally (before Load):
+```go
+goconfig.RegisterCustomType[APIKey](apiKeyHandler)
+// Now all APIKey fields will use this handler
 ```
 
 **Important:** Handlers are registered by TYPE, not by field name. All fields of type T will use the same handler.
@@ -177,12 +160,12 @@ err := goconfig.Load(ctx, &cfg,
 )
 ```
 
-### New System
+### New System (Building Block Approach)
 ```go
-// New: Type-based handlers
+// New: Type-based handlers with building blocks
 type APIKey string
 
-apiKeyHandler := goconfig.NewCustomHandler(
+apiKeyHandler := goconfig.NewCustomType(
     func(rawValue string) (APIKey, error) {
         return APIKey(rawValue), nil
     },
@@ -201,7 +184,7 @@ err := goconfig.Load(ctx, &cfg,
 1. **Type-based vs Field-based**: Old system used field names ("APIKey"), new system uses types (APIKey)
 2. **Type safety**: New system uses generics for compile-time type safety
 3. **Reusability**: Custom types can be reused across multiple fields automatically
-4. **Composability**: New system provides `ReplaceParser()`, `AddValidators()`, etc. for composing handlers
+4. **Composability**: Building block architecture - compose handlers using `AddValidators()`, `CastCustomType()`, `AddDynamicValidation()`, etc.
 
 ## Common Patterns
 
@@ -210,7 +193,8 @@ err := goconfig.Load(ctx, &cfg,
 ```go
 type Email string
 
-emailHandler := goconfig.NewCustomHandler(
+// Building block approach: start with parser, add validators
+emailHandler := goconfig.NewCustomType(
     func(rawValue string) (Email, error) {
         return Email(rawValue), nil
     },
@@ -245,19 +229,20 @@ type Config struct {
     Level LogLevel `key:"LOG_LEVEL" default:"info"`
 }
 
+// Use the specialized enum building block
 err := goconfig.Load(ctx, &config,
     goconfig.WithCustomType[LogLevel](
-        goconfig.NewEnumHandler(LogDebug, LogInfo, LogWarn, LogError),
+        goconfig.NewStringEnumType(LogDebug, LogInfo, LogWarn, LogError),
     ),
 )
 ```
 
-### Adding Validation to Built-in Types
+### Adding Validation to Built-in Types (Composition)
 
 ```go
-// Make all ints even
-baseHandler := goconfig.NewTypedIntHandler[int]()
-evenHandler, _ := goconfig.AddValidators(baseHandler, func(v int) error {
+// Building block approach: Take default int handler and add validators
+baseHandler := goconfig.DefaultIntegerType[int]()
+evenHandler := goconfig.AddValidators(baseHandler, func(v int) error {
     if v%2 != 0 {
         return errors.New("must be even")
     }
@@ -271,6 +256,34 @@ type Config struct {
 err := goconfig.Load(ctx, &config,
     goconfig.WithCustomType[int](evenHandler),
 )
+// Now all int fields get tag validation (min/max) AND the even check
+```
+
+### Type Aliases with CastCustomType
+
+```go
+type Port int
+
+// Building block: Cast the int64 handler to Port type
+portHandler := goconfig.CastCustomType[int64, Port](
+    goconfig.DefaultIntegerType[int64](),
+)
+
+// Or add validators after casting
+portWithValidation := goconfig.AddValidators(portHandler, func(p Port) error {
+    if int(p)%10 != 0 {
+        return errors.New("port must be multiple of 10")
+    }
+    return nil
+})
+
+type Config struct {
+    Port Port `key:"PORT" default:"8080" min:"1024" max:"65535"`
+}
+
+err := goconfig.Load(ctx, &config,
+    goconfig.WithCustomType[Port](portWithValidation),
+)
 ```
 
 ### Complex Custom Types
@@ -281,7 +294,8 @@ type ServerAddress struct {
     Port int
 }
 
-addressHandler := goconfig.NewCustomHandler(
+// Building block: Custom parser for complex type
+addressHandler := goconfig.NewCustomType(
     func(rawValue string) (ServerAddress, error) {
         parts := strings.Split(rawValue, ":")
         if len(parts) != 2 {
@@ -292,6 +306,13 @@ addressHandler := goconfig.NewCustomHandler(
             return ServerAddress{}, fmt.Errorf("invalid port: %w", err)
         }
         return ServerAddress{Host: parts[0], Port: port}, nil
+    },
+    // Add validators as additional building blocks
+    func(addr ServerAddress) error {
+        if addr.Port < 1024 || addr.Port > 65535 {
+            return errors.New("port must be in range 1024-65535")
+        }
+        return nil
     },
 )
 
@@ -335,11 +356,45 @@ if err != nil {
 }
 ```
 
+## Building Block Composition Patterns
+
+The power of the building block system is in **composition**. Here are common patterns:
+
+### Pattern 1: Start with Parser, Add Validators
+```go
+handler := goconfig.NewCustomType(parser, validator1, validator2, ...)
+```
+
+### Pattern 2: Extend Default Type with Validators
+```go
+handler := goconfig.AddValidators(goconfig.DefaultIntegerType[int](), myValidator)
+```
+
+### Pattern 3: Cast Then Validate
+```go
+handler := goconfig.AddValidators(
+    goconfig.CastCustomType[int64, Port](goconfig.DefaultIntegerType[int64]()),
+    portValidator,
+)
+```
+
+### Pattern 4: Chain Multiple Wrappers
+```go
+handler := goconfig.AddDynamicValidation(
+    goconfig.AddValidators(baseHandler, validator1),
+    customWrapper,
+)
+```
+
 ## Key Files
 
-- `custom_types.go` - Public API for custom types
-- `internal/readpipeline/custom_types.go` - Custom type implementation
-- `internal/readpipeline/typed_handler.go` - TypedHandler interface and implementation
+- `custom_types.go` - Public API for building blocks
+- `internal/customtypes/parser.go` - Parser building block
+- `internal/customtypes/validation_wrapper.go` - Validation wrapper building block
+- `internal/customtypes/chain_handler.go` - Composition via chaining
+- `internal/customtypes/transformer.go` - Type transformation building block
+- `internal/customtypes/enum.go` - Enum building block
+- `internal/readpipeline/typed_handler.go` - TypedHandler interface
 - `internal/readpipeline/typeregistry.go` - Type registry
 - `loadoptions.go` - WithCustomType() option
 - `example/validation/main.go` - Example using custom types

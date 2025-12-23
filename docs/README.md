@@ -10,13 +10,27 @@ Comprehensive guides for using goconfig.
 
 ## Documentation Guides
 
+### 🧱 [Custom Types - Building Block Guide](custom-types.md)
+Learn the building block architecture for creating custom types.
+
+**Topics covered:**
+- Core building blocks (parser, validator, wrapper, handler, transformer)
+- Building block functions (NewCustomType, AddValidators, CastCustomType, etc.)
+- Composition patterns
+- Complete examples (API keys, ports, URLs, complex types, enums)
+- Advanced topics (global registration, reusable handlers, testing)
+
+**When to read:** Essential when you need custom types beyond built-in validation. Start here to understand the composable building block approach.
+
+---
+
 ### 📋 [Validation](validation.md)
 Learn how to validate configuration values using built-in and custom validators.
 
 **Topics covered:**
 - Min/max range validation for integers, floats, and durations
 - Pattern validation using regular expressions
-- Custom validation functions
+- Custom type validation with building blocks
 - Nested field validation
 - Combining multiple validators
 - Error messages and debugging
@@ -97,8 +111,7 @@ Extend goconfig with custom behavior.
 // Load with options
 err := goconfig.Load(context.Background(), &config,
     goconfig.WithKeyStore(customStore),
-    goconfig.WithParser("Field", parserFunc),
-    goconfig.WithValidator("Field", validatorFunc),
+    goconfig.WithCustomType[APIKey](apiKeyHandler),
 )
 ```
 
@@ -132,21 +145,34 @@ err := goconfig.Load(context.Background(), &cfg)
 
 See: [validation example](../example/validation), [validation.md](validation.md)
 
-### With Custom Validators
+### With Custom Types (Building Blocks)
 
 ```go
-err := goconfig.Load(context.Background(), &cfg,
-    goconfig.WithValidator("APIKey", func(value any) error {
-        key := value.(string)
-        if !strings.HasPrefix(key, "sk-") {
+type APIKey string
+
+// Building block: parser + validator
+apiKeyHandler := goconfig.NewCustomType(
+    func(rawValue string) (APIKey, error) {
+        return APIKey(rawValue), nil
+    },
+    func(key APIKey) error {
+        if !strings.HasPrefix(string(key), "sk-") {
             return fmt.Errorf("API key must start with 'sk-'")
         }
         return nil
-    }),
+    },
+)
+
+type Config struct {
+    APIKey APIKey `key:"API_KEY" required:"true"`
+}
+
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithCustomType[APIKey](apiKeyHandler),
 )
 ```
 
-See: [validation.md](validation.md#custom-validators)
+See: [custom-types.md](custom-types.md), [validation.md](validation.md#custom-validators)
 
 ### JSON Configuration
 

@@ -7,6 +7,7 @@ A simple, type-safe Go library for loading configuration from environment variab
 - 🏷️ **Struct-based configuration** - Define config with Go structs and tags
 - ✅ **Built-in validation** - `min`, `max`, and `pattern` tags plus custom type validators ([docs](docs/validation.md) | [example](example/validation))
 - 🎯 **Type-safe** - Automatic conversion for primitives, durations, and JSON with generic type handlers
+- 🧱 **Building block architecture** - Compose custom types from simple, reusable components ([docs](docs/custom-types.md))
 - 🔄 **Flexible defaults** - Struct tags or pre-initialized values ([docs](docs/defaulting.md))
 - 🌳 **Nested structs** - Organize configuration hierarchically
 - 🔧 **Extensible** - Custom types and key stores ([docs](docs/advanced.md))
@@ -115,7 +116,7 @@ invalid value for PORT: below minimum 1024
 
 ### Custom Types
 
-Define custom types with validation using the type-safe handler system:
+Define custom types with validation using the **building block architecture** - compose simple, reusable components:
 
 ```go
 type APIKey string
@@ -124,7 +125,8 @@ type Config struct {
     APIKey APIKey `key:"API_KEY" required:"true"`
 }
 
-apiKeyHandler := goconfig.NewCustomHandler(
+// Building block approach: parser + validators
+apiKeyHandler := goconfig.NewCustomType(
     func(rawValue string) (APIKey, error) {
         return APIKey(rawValue), nil
     },
@@ -141,7 +143,13 @@ err := goconfig.Load(context.Background(), &cfg,
 )
 ```
 
-📚 **[Full Validation Guide](docs/validation.md)** | **[Validation Example](example/validation)**
+The building block system lets you compose handlers:
+- `NewCustomType` - Start with parser and validators
+- `AddValidators` - Add validators to existing handlers
+- `CastCustomType` - Transform handlers for type aliases
+- `NewStringEnumType` - Specialized enum builder
+
+📚 **[Custom Types Guide](docs/custom-types.md)** | **[Validation Guide](docs/validation.md)** | **[Example](example/validation)**
 
 ## JSON Configuration
 
@@ -167,10 +175,11 @@ export MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
 ## Documentation
 
 - 📖 **[Documentation Index](docs/)** - Complete guides and reference
+- 🧱 **[Custom Types Guide](docs/custom-types.md)** - Building block architecture for custom types
 - 📋 **[Validation](docs/validation.md)** - Min/max, pattern, and custom type validators
 - ⚙️ **[Defaulting & Required Fields](docs/defaulting.md)** - How defaults and required work
 - 🔄 **[JSON Deserialization](docs/json.md)** - Working with JSON config
-- 🔧 **[Advanced Features](docs/advanced.md)** - Custom types and key stores
+- 🔧 **[Advanced Features](docs/advanced.md)** - Custom key stores and advanced patterns
 - 💡 **[Examples](example/)** - Working code examples
 
 ## Examples
