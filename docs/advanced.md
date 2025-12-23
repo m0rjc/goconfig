@@ -4,16 +4,16 @@ This guide covers advanced features for extending goconfig with custom behavior.
 
 ## Table of Contents
 
-- [Custom Parsers](#custom-parsers)
+- [Custom Types](#custom-types)
 - [Custom Key Stores](#custom-key-stores)
 - [Composite Key Stores](#composite-key-stores)
 - [Error Handling](#error-handling)
 
-## Custom Parsers
+## Custom Types
 
-Custom parsers allow you to define parsing logic for specific fields that need special handling beyond the built-in type conversions.
+Custom types allow you to define parsing and validation logic for specific types that need special handling beyond the built-in type conversions. The type system uses Go generics for type safety.
 
-### Basic Custom Parser
+### Basic Custom Type
 
 ```go
 type Config struct {
@@ -32,12 +32,12 @@ type CustomType struct {
 func main() {
     var cfg Config
 
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithParser("SpecialValue", func(value string) (any, error) {
+    customHandler := goconfig.NewCustomHandler(
+        func(rawValue string) (CustomType, error) {
             // Parse the value however you need
-            parts := strings.Split(value, ":")
+            parts := strings.Split(rawValue, ":")
             if len(parts) != 2 {
-                return nil, fmt.Errorf("invalid format, expected key:value")
+                return CustomType{}, fmt.Errorf("invalid format, expected key:value")
             }
 
             return CustomType{
@@ -46,7 +46,11 @@ func main() {
                     "key": parts[0],
                 },
             }, nil
-        }),
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[CustomType](customHandler),
     )
 
     if err != nil {
@@ -55,29 +59,35 @@ func main() {
 }
 ```
 
-### Use Cases for Custom Parsers
+### Use Cases for Custom Types
 
 #### Parsing URLs
 
 ```go
+type DatabaseURL url.URL
+
 type Config struct {
-    DatabaseURL *url.URL `key:"DATABASE_URL"`
+    DatabaseURL DatabaseURL `key:"DATABASE_URL"`
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithParser("DatabaseURL", func(value string) (any, error) {
-            parsedURL, err := url.Parse(value)
+    urlHandler := goconfig.NewCustomHandler(
+        func(rawValue string) (DatabaseURL, error) {
+            parsedURL, err := url.Parse(rawValue)
             if err != nil {
-                return nil, fmt.Errorf("invalid URL: %w", err)
+                return DatabaseURL{}, fmt.Errorf("invalid URL: %w", err)
             }
             if parsedURL.Scheme != "postgres" && parsedURL.Scheme != "postgresql" {
-                return nil, fmt.Errorf("unsupported database scheme: %s", parsedURL.Scheme)
+                return DatabaseURL{}, fmt.Errorf("unsupported database scheme: %s", parsedURL.Scheme)
             }
-            return parsedURL, nil
-        }),
+            return DatabaseURL(*parsedURL), nil
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[DatabaseURL](urlHandler),
     )
 }
 ```
@@ -85,22 +95,28 @@ func main() {
 #### Parsing Custom Time Formats
 
 ```go
+type Timestamp time.Time
+
 type Config struct {
-    Timestamp time.Time `key:"TIMESTAMP"`
+    Timestamp Timestamp `key:"TIMESTAMP"`
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithParser("Timestamp", func(value string) (any, error) {
+    timestampHandler := goconfig.NewCustomHandler(
+        func(rawValue string) (Timestamp, error) {
             // Parse RFC3339 format
-            t, err := time.Parse(time.RFC3339, value)
+            t, err := time.Parse(time.RFC3339, rawValue)
             if err != nil {
-                return nil, fmt.Errorf("invalid timestamp format: %w", err)
+                return Timestamp{}, fmt.Errorf("invalid timestamp format: %w", err)
             }
-            return t, nil
-        }),
+            return Timestamp(t), nil
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[Timestamp](timestampHandler),
     )
 }
 ```
@@ -108,25 +124,31 @@ func main() {
 #### Parsing Lists with Custom Delimiters
 
 ```go
+type HostList []string
+
 type Config struct {
-    AllowedHosts []string `key:"ALLOWED_HOSTS"`
+    AllowedHosts HostList `key:"ALLOWED_HOSTS"`
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithParser("AllowedHosts", func(value string) (any, error) {
+    hostListHandler := goconfig.NewCustomHandler(
+        func(rawValue string) (HostList, error) {
             // Split on semicolons instead of commas
-            hosts := strings.Split(value, ";")
+            hosts := strings.Split(rawValue, ";")
 
             // Trim whitespace
             for i, host := range hosts {
                 hosts[i] = strings.TrimSpace(host)
             }
 
-            return hosts, nil
-        }),
+            return HostList(hosts), nil
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[HostList](hostListHandler),
     )
 
     // export ALLOWED_HOSTS="example.com; api.example.com; www.example.com"
@@ -136,41 +158,49 @@ func main() {
 #### Parsing Binary Data
 
 ```go
+type EncryptionKey []byte
+
 type Config struct {
-    EncryptionKey []byte `key:"ENCRYPTION_KEY"`
+    EncryptionKey EncryptionKey `key:"ENCRYPTION_KEY"`
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithParser("EncryptionKey", func(value string) (any, error) {
+    keyHandler := goconfig.NewCustomHandler(
+        func(rawValue string) (EncryptionKey, error) {
             // Decode base64-encoded key
-            key, err := base64.StdEncoding.DecodeString(value)
+            key, err := base64.StdEncoding.DecodeString(rawValue)
             if err != nil {
                 return nil, fmt.Errorf("invalid base64: %w", err)
             }
             if len(key) != 32 {
                 return nil, fmt.Errorf("encryption key must be 32 bytes, got %d", len(key))
             }
-            return key, nil
-        }),
+            return EncryptionKey(key), nil
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[EncryptionKey](keyHandler),
     )
 }
 ```
 
 ### Parser Error Handling
 
-Custom parsers should return descriptive errors:
+Custom type parsers should return descriptive errors:
 
 ```go
-goconfig.WithParser("Field", func(value string) (any, error) {
-    // Good: Descriptive error
-    return nil, fmt.Errorf("invalid format: expected 'key=value', got '%s'", value)
+customHandler := goconfig.NewCustomHandler(
+    func(rawValue string) (MyType, error) {
+        // Good: Descriptive error
+        return MyType{}, fmt.Errorf("invalid format: expected 'key=value', got '%s'", rawValue)
 
-    // Bad: Generic error
-    return nil, fmt.Errorf("parse error")
-})
+        // Bad: Generic error
+        return MyType{}, fmt.Errorf("parse error")
+    },
+)
 ```
 
 The error will be wrapped with field context automatically:
@@ -450,17 +480,15 @@ func main() {
             vaultKeyStore(vaultClient, "secret/myapp"),
         )),
 
-        // Custom parsers
-        goconfig.WithParser("DatabaseURL", parseURL),
-        goconfig.WithParser("EncryptionKey", parseBase64Key),
-
-        // Custom validators
-        goconfig.WithValidator("APIKey", validateAPIKey),
-        goconfig.WithValidator("Database.Host", validateProductionHost),
+        // Custom types
+        goconfig.WithCustomType[DatabaseURL](urlHandler),
+        goconfig.WithCustomType[EncryptionKey](keyHandler),
+        goconfig.WithCustomType[APIKey](apiKeyHandler),
+        goconfig.WithCustomType[DatabaseHost](hostHandler),
     )
 
     if err != nil {
-        LogError(logger, err)
+        goconfig.LogError(logger, err)
         os.Exit(1)
     }
 }
@@ -468,10 +496,13 @@ func main() {
 
 ## Best Practices
 
-1. **Use CompositeStore for flexibility** - Allow environment overrides in production
-2. **Cache key store results** - Avoid repeated API calls for the same key
-3. **Handle context cancellation** - Respect context timeouts in custom key stores
-4. **Return descriptive errors** - Help users understand what went wrong
-5. **Test with in-memory stores** - Use `mapKeyStore` for unit tests
-6. **Fail fast on key store errors** - Don't silently ignore lookup failures
-7. **Document custom parsers** - Explain expected format and validation rules
+1. **Use custom types for domain validation** - Create custom types (e.g., `APIKey`, `Email`) instead of using raw strings for fields that need validation
+2. **Leverage type safety** - Use the type system's generics for compile-time type safety
+3. **Reuse type handlers** - Define handlers once and use them across multiple fields of the same type
+4. **Use CompositeStore for flexibility** - Allow environment overrides in production
+5. **Cache key store results** - Avoid repeated API calls for the same key
+6. **Handle context cancellation** - Respect context timeouts in custom key stores
+7. **Return descriptive errors** - Help users understand what went wrong
+8. **Test with in-memory stores** - Use `mapKeyStore` for unit tests
+9. **Fail fast on key store errors** - Don't silently ignore lookup failures
+10. **Use `NewEnumHandler` for enums** - Automatic validation for string-based enum types

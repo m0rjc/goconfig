@@ -5,11 +5,11 @@ A simple, type-safe Go library for loading configuration from environment variab
 ## Features
 
 - 🏷️ **Struct-based configuration** - Define config with Go structs and tags
-- ✅ **Built-in validation** - `min`, `max`, and `pattern` tags plus custom validators ([docs](docs/validation.md) | [example](example/validation))
-- 🎯 **Type-safe** - Automatic conversion for primitives, durations, and JSON
+- ✅ **Built-in validation** - `min`, `max`, and `pattern` tags plus custom type validators ([docs](docs/validation.md) | [example](example/validation))
+- 🎯 **Type-safe** - Automatic conversion for primitives, durations, and JSON with generic type handlers
 - 🔄 **Flexible defaults** - Struct tags or pre-initialized values ([docs](docs/defaulting.md))
 - 🌳 **Nested structs** - Organize configuration hierarchically
-- 🔧 **Extensible** - Custom parsers and key stores ([docs](docs/advanced.md))
+- 🔧 **Extensible** - Custom types and key stores ([docs](docs/advanced.md))
 - 💬 **Clear errors** - Descriptive validation and missing field errors
 
 ## Installation
@@ -113,17 +113,31 @@ Validation errors provide clear messages:
 invalid value for PORT: below minimum 1024
 ```
 
-### Custom Validators
+### Custom Types
+
+Define custom types with validation using the type-safe handler system:
 
 ```go
-err := goconfig.Load(context.Background(), &cfg,
-    goconfig.WithValidator("APIKey", func(value any) error {
-        key := value.(string)
-        if !strings.HasPrefix(key, "sk-") {
+type APIKey string
+
+type Config struct {
+    APIKey APIKey `key:"API_KEY" required:"true"`
+}
+
+apiKeyHandler := goconfig.NewCustomHandler(
+    func(rawValue string) (APIKey, error) {
+        return APIKey(rawValue), nil
+    },
+    func(value APIKey) error {
+        if !strings.HasPrefix(string(value), "sk-") {
             return fmt.Errorf("API key must start with 'sk-'")
         }
         return nil
-    }),
+    },
+)
+
+err := goconfig.Load(context.Background(), &cfg,
+    goconfig.WithCustomType[APIKey](apiKeyHandler),
 )
 ```
 
@@ -153,10 +167,10 @@ export MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
 ## Documentation
 
 - 📖 **[Documentation Index](docs/)** - Complete guides and reference
-- 📋 **[Validation](docs/validation.md)** - Min/max, pattern, and custom validators
+- 📋 **[Validation](docs/validation.md)** - Min/max, pattern, and custom type validators
 - ⚙️ **[Defaulting & Required Fields](docs/defaulting.md)** - How defaults and required work
 - 🔄 **[JSON Deserialization](docs/json.md)** - Working with JSON config
-- 🔧 **[Advanced Features](docs/advanced.md)** - Custom parsers and key stores
+- 🔧 **[Advanced Features](docs/advanced.md)** - Custom types and key stores
 - 💡 **[Examples](example/)** - Working code examples
 
 ## Examples
