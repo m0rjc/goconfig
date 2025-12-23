@@ -1,12 +1,12 @@
-package process
+package readpipeline
 
 import (
 	"encoding/json"
 	"reflect"
 )
 
-func NewJsonHandler(targetType reflect.Type) Handler {
-	return TypeHandler[any]{
+func NewJsonPipelineBuilder(targetType reflect.Type) TypedHandler[any] {
+	return &typeHandlerImpl[any]{
 		Parser: func(rawValue string) (any, error) {
 			ptr := reflect.New(targetType).Interface()
 			err := json.Unmarshal([]byte(rawValue), ptr)
@@ -15,7 +15,7 @@ func NewJsonHandler(targetType reflect.Type) Handler {
 				return nil, err
 			}
 
-			// Dereference the value to maintain consistency with the maxim "Pipelines always process values"
+			// Dereference the value to maintain consistency with the maxim "Pipelines always readpipeline values"
 			return reflect.ValueOf(ptr).Elem().Interface(), nil
 		},
 

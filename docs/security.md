@@ -25,11 +25,11 @@ When validation or parsing fails, these values could be exposed through:
 
 ### Implementation Requirements
 
-1. **Parsing Errors** (config.go:242)
+1. **Parsing Errors** 
    - ❌ Bad: `"error parsing value %s: %w", configuredValue, err`
    - ✅ Good: `"error parsing value: %w", err`
 
-2. **Validation Errors** (validation.go)
+2. **Validation Errors** 
    - ❌ Bad: `"value %s does not match pattern %s", actualValue, pattern`
    - ✅ Good: `"does not match pattern %s", pattern`
    - ❌ Bad: `"value %d is below minimum %d", actualValue, min`
@@ -59,9 +59,3 @@ When adding new validation:
 2. Ensure test expectations do NOT include actual values
 3. Verify error messages only describe what's wrong, not what was provided
 
-### Exception: Debugging Information
-
-Even in debug mode or verbose logging, actual configuration values should not be included in error messages. If debugging requires seeing values:
-- Users should check their environment variables directly
-- Application logs should be reviewed at the configuration loading stage (before validation)
-- Never compromise security for convenience

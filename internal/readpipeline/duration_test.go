@@ -1,4 +1,4 @@
-package process
+package readpipeline
 
 import (
 	"reflect"
@@ -43,9 +43,10 @@ func TestDurationTypes(t *testing.T) {
 		},
 	}
 
+	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proc, err := New(tt.fieldType, tt.tags, nil, nil)
+			proc, err := New(tt.fieldType, tt.tags, registry)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}

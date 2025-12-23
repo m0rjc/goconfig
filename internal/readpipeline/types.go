@@ -1,8 +1,6 @@
-package process
+package readpipeline
 
-import (
-	"reflect"
-)
+import "reflect"
 
 // FieldProcessor takes the user input string and outputs the final value to be set on the struct field.
 // Any parsing or validation errors are returned as an error
@@ -14,6 +12,21 @@ type FieldProcessor[T any] func(rawValue string) (T, error)
 // Validators always deal with values, even if the target type is a pointer. The system makes the pointer
 // at the last minute (before assignment)
 type Validator[T any] func(value T) error
+
+// TypedHandler is the strongly typed version of the PipelineBuilder interface.
+type TypedHandler[T any] interface {
+	// BuildPipeline creates the final FieldProcessor[T] for the given tags.
+	BuildPipeline(tags reflect.StructTag) (FieldProcessor[T], error)
+}
+
+// PipelineBuilder is the typeless interface used to build the read pipeline.
+type PipelineBuilder interface {
+	// Build creates the final FieldProcessor[any] for the given tags.
+	Build(tags reflect.StructTag) (FieldProcessor[any], error)
+}
+
+// Wrapper is a factory that wraps a FieldProcessor according to tags present on the target field
+type Wrapper[T any] func(tags reflect.StructTag, inputProcess FieldProcessor[T]) (FieldProcessor[T], error)
 
 // Pipe combines a processor and a Validator, adding validation to the processor
 func Pipe[T any](processor FieldProcessor[T], validator Validator[T]) FieldProcessor[T] {
@@ -48,9 +61,7 @@ func PipeMultiple[T any](processor FieldProcessor[T], validators []Validator[T])
 	})
 }
 
-// Wrapper is a factory that wraps a FieldProcessor according to tags present on the target field
-type Wrapper[T any] func(tags reflect.StructTag, inputProcess FieldProcessor[T]) (FieldProcessor[T], error)
-
+// NewCompositeWrapper creates a Wrapper that applies a sequence of wrappers to a FieldProcessor
 func NewCompositeWrapper[T any](wrappers ...Wrapper[T]) Wrapper[T] {
 	return func(tags reflect.StructTag, inputProcess FieldProcessor[T]) (FieldProcessor[T], error) {
 		var wrapped FieldProcessor[T] = inputProcess

@@ -95,48 +95,77 @@ type SecurityConfig struct {
 
 ## Custom Validators
 
-Use the `WithValidator` option to add custom validation logic beyond what struct tags provide:
+Use custom types with the `WithCustomType` option to add custom validation logic beyond what struct tags provide. The system uses a **building block architecture** where you compose handlers from simple, reusable components.
+
+### Building Block Basics
+
+The custom type system provides these building blocks:
+
+- **NewCustomType** - Create a handler from a parser and validators
+- **AddValidators** - Add validators to an existing handler
+- **CastCustomType** - Transform a handler to work with type aliases
+- **NewStringEnumType** - Create an enum validator for string types
+- **DefaultXxxType** - Get default handlers for built-in types
+
+### Basic Custom Types
 
 ```go
+// Define custom types for fields that need special validation
+type APIKey string
+type Hostname string
+type Port int
+
 type Config struct {
-    APIKey   string `key:"API_KEY" required:"true"`
-    Host     string `key:"HOST" default:"localhost"`
-    Port     int    `key:"PORT" default:"8080" min:"1024" max:"65535"`
+    APIKey APIKey   `key:"API_KEY" required:"true"`
+    Host   Hostname `key:"HOST" default:"localhost"`
+    Port   Port     `key:"PORT" default:"8080" min:"1024" max:"65535"`
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(&cfg,
-        // Validate API key format
-        goconfig.WithValidator("APIKey", func(value any) error {
-            key := value.(string)
-            if !strings.HasPrefix(key, "sk-") {
-                return fmt.Errorf("API key must start with 'sk-'")
-            }
-            if len(key) < 20 {
-                return fmt.Errorf("API key must be at least 20 characters long")
-            }
-            return nil
-        }),
+    err := goconfig.Load(context.Background(), &cfg,
+        // Building block: parser + validators
+        goconfig.WithCustomType[APIKey](goconfig.NewCustomType(
+            func(rawValue string) (APIKey, error) {
+                return APIKey(rawValue), nil
+            },
+            func(value APIKey) error {
+                key := string(value)
+                if !strings.HasPrefix(key, "sk-") {
+                    return fmt.Errorf("API key must start with 'sk-'")
+                }
+                if len(key) < 20 {
+                    return fmt.Errorf("API key must be at least 20 characters long")
+                }
+                return nil
+            },
+        )),
 
-        // Validate host is not an IP address
-        goconfig.WithValidator("Host", func(value any) error {
-            host := value.(string)
-            if net.ParseIP(host) != nil {
-                return fmt.Errorf("host must be a hostname, not an IP address")
-            }
-            return nil
-        }),
+        // Building block: parser + validator
+        goconfig.WithCustomType[Hostname](goconfig.NewCustomType(
+            func(rawValue string) (Hostname, error) {
+                return Hostname(rawValue), nil
+            },
+            func(value Hostname) error {
+                host := string(value)
+                if net.ParseIP(host) != nil {
+                    return fmt.Errorf("host must be a hostname, not an IP address")
+                }
+                return nil
+            },
+        )),
 
-        // Additional port validation
-        goconfig.WithValidator("Port", func(value any) error {
-            port := value.(int64)
-            if port%10 != 0 {
-                return fmt.Errorf("port must be a multiple of 10")
-            }
-            return nil
-        }),
+        // Building block: cast int handler to Port, then add validator
+        goconfig.WithCustomType[Port](goconfig.AddValidators(
+            goconfig.CastCustomType[int, Port](goconfig.DefaultIntegerType[int]()),
+            func(value Port) error {
+                if int(value)%10 != 0 {
+                    return fmt.Errorf("port must be a multiple of 10")
+                }
+                return nil
+            },
+        )),
     )
 
     if err != nil {
@@ -145,57 +174,133 @@ func main() {
 }
 ```
 
-### Type Assertions in Custom Validators
+### Type-Safe Validators
 
-When writing custom validators, use the appropriate type assertion based on the field type:
+Custom validators are type-safe - no type assertions needed:
 
-| Field Type | Validator Type Assertion | Example |
-|------------|-------------------------|---------|
-| `string` | `value.(string)` | `key := value.(string)` |
-| `int`, `int8`, `int16`, `int32`, `int64` | `value.(int64)` | `port := value.(int64)` |
-| `uint`, `uint8`, `uint16`, `uint32`, `uint64` | `value.(uint64)` | `count := value.(uint64)` |
-| `float32`, `float64` | `value.(float64)` | `ratio := value.(float64)` |
-| `bool` | `value.(bool)` | `enabled := value.(bool)` |
-| `time.Duration` | `value.(time.Duration)` | `timeout := value.(time.Duration)` |
+```go
+// String-based custom type - building block approach
+type Email string
+emailHandler := goconfig.NewCustomType(
+    func(rawValue string) (Email, error) {
+        return Email(rawValue), nil
+    },
+    func(value Email) error {  // value is Email, not any
+        if !strings.Contains(string(value), "@") {
+            return errors.New("invalid email format")
+        }
+        return nil
+    },
+)
+
+// Type alias - use CastCustomType building block
+type EvenPort int
+evenPortHandler := goconfig.AddValidators(
+    goconfig.CastCustomType[int, EvenPort](goconfig.DefaultIntegerType[int]()),
+    func(value EvenPort) error {  // value is EvenPort, not any
+        if int(value)%2 != 0 {
+            return errors.New("port must be even")
+        }
+        return nil
+    },
+)
+
+// Duration-based custom type - compose with default duration handler
+type RequestTimeout time.Duration
+timeoutHandler := goconfig.AddValidators(
+    goconfig.CastCustomType[time.Duration, RequestTimeout](goconfig.DefaultDurationType()),
+    func(value RequestTimeout) error {  // value is RequestTimeout, not any
+        if value < RequestTimeout(100*time.Millisecond) {
+            return errors.New("timeout too short")
+        }
+        return nil
+    },
+)
+```
+
+### Enum Types
+
+For string-based enums, use the `NewStringEnumType` building block:
+
+```go
+type LogLevel string
+
+const (
+    LogDebug LogLevel = "debug"
+    LogInfo  LogLevel = "info"
+    LogWarn  LogLevel = "warn"
+    LogError LogLevel = "error"
+)
+
+type Config struct {
+    Level LogLevel `key:"LOG_LEVEL" default:"info"`
+}
+
+func main() {
+    var cfg Config
+
+    // Use the specialized enum building block
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[LogLevel](
+            goconfig.NewStringEnumType(LogDebug, LogInfo, LogWarn, LogError),
+        ),
+    )
+}
+```
+
+The enum building block automatically validates that the value is one of the provided options and returns a clear error if not.
 
 ## Nested Field Validation
 
-Validators work with nested structs using dot notation:
+Custom type validators work with nested structs. Define custom types and they will be validated regardless of where they appear in the config structure:
 
 ```go
+type DatabaseHost string
+type APIEndpoint string
+
 type Config struct {
     Database struct {
-        Host     string `key:"DB_HOST" default:"localhost"`
-        Port     int    `key:"DB_PORT" default:"5432" min:"1024" max:"65535"`
-        Username string `key:"DB_USER" default:"postgres"`
+        Host     DatabaseHost `key:"DB_HOST" default:"localhost"`
+        Port     int          `key:"DB_PORT" default:"5432" min:"1024" max:"65535"`
+        Username string       `key:"DB_USER" default:"postgres"`
     }
     API struct {
-        Key      string `key:"API_KEY" required:"true"`
-        Endpoint string `key:"API_ENDPOINT" default:"https://api.example.com"`
+        Key      string      `key:"API_KEY" required:"true"`
+        Endpoint APIEndpoint `key:"API_ENDPOINT" default:"https://api.example.com"`
     }
 }
 
 func main() {
     var cfg Config
 
-    err := goconfig.Load(&cfg,
-        // Validate database host
-        goconfig.WithValidator("Database.Host", func(value any) error {
-            host := value.(string)
-            if host == "localhost" {
-                return fmt.Errorf("production environments must use a remote database")
-            }
-            return nil
-        }),
+    err := goconfig.Load(context.Background(), &cfg,
+        // Building block: parser + validator
+        goconfig.WithCustomType[DatabaseHost](goconfig.NewCustomType(
+            func(rawValue string) (DatabaseHost, error) {
+                return DatabaseHost(rawValue), nil
+            },
+            func(value DatabaseHost) error {
+                host := string(value)
+                if host == "localhost" {
+                    return fmt.Errorf("production environments must use a remote database")
+                }
+                return nil
+            },
+        )),
 
-        // Validate API endpoint uses HTTPS
-        goconfig.WithValidator("API.Endpoint", func(value any) error {
-            endpoint := value.(string)
-            if !strings.HasPrefix(endpoint, "https://") {
-                return fmt.Errorf("API endpoint must use HTTPS")
-            }
-            return nil
-        }),
+        // Building block: parser + validator
+        goconfig.WithCustomType[APIEndpoint](goconfig.NewCustomType(
+            func(rawValue string) (APIEndpoint, error) {
+                return APIEndpoint(rawValue), nil
+            },
+            func(value APIEndpoint) error {
+                endpoint := string(value)
+                if !strings.HasPrefix(endpoint, "https://") {
+                    return fmt.Errorf("API endpoint must use HTTPS")
+                }
+                return nil
+            },
+        )),
     )
 
     if err != nil {
@@ -204,9 +309,45 @@ func main() {
 }
 ```
 
+**Note:** Custom type handlers are registered by TYPE, not by field path. All fields of the same type will use the same handler, regardless of nesting level.
+
 ## Combining Validators
 
-You can combine tag-based validation with custom validators. All validations must pass:
+You can combine tag-based validation with custom type validators. All validations must pass:
+
+### Using Custom Types with Tag Validation
+
+```go
+type Port int
+
+type Config struct {
+    Port Port `key:"PORT" default:"8080" min:"1024" max:"65535"`
+}
+
+func main() {
+    var cfg Config
+
+    // Building block: Cast int handler to Port, add custom validation
+    // Tag validation (min/max) runs first, then custom validators
+    portHandler := goconfig.AddValidators(
+        goconfig.CastCustomType[int, Port](goconfig.DefaultIntegerType[int]()),
+        func(value Port) error {
+            if int(value)%10 != 0 {
+                return fmt.Errorf("port must be a multiple of 10")
+            }
+            return nil
+        },
+    )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[Port](portHandler),
+    )
+}
+```
+
+### Adding Validators to Built-in Types
+
+Use the `AddValidators` building block to extend built-in types:
 
 ```go
 type Config struct {
@@ -216,17 +357,56 @@ type Config struct {
 func main() {
     var cfg Config
 
-    err := goconfig.Load(&cfg,
-        // This runs AFTER min/max validation from the tag
-        goconfig.WithValidator("Port", func(value any) error {
-            port := value.(int64)
-            if port%10 != 0 {
-                return fmt.Errorf("port must be a multiple of 10")
+    // Building block: Take default int handler and add validator
+    evenIntHandler := goconfig.AddValidators(
+        goconfig.DefaultIntegerType[int](),
+        func(v int) error {
+            if v%2 != 0 {
+                return errors.New("must be even")
             }
             return nil
-        }),
+        },
     )
+
+    err := goconfig.Load(context.Background(), &cfg,
+        goconfig.WithCustomType[int](evenIntHandler),
+    )
+    // Now all int fields get tag validation (min/max) AND even check
 }
+```
+
+### Multiple Validators
+
+You can pass multiple validators to `NewCustomType`:
+
+```go
+type APIKey string
+
+// Building block: parser + multiple validators
+apiKeyHandler := goconfig.NewCustomType(
+    func(rawValue string) (APIKey, error) {
+        return APIKey(rawValue), nil
+    },
+    // Multiple validators - all must pass
+    func(value APIKey) error {
+        if !strings.HasPrefix(string(value), "sk-") {
+            return errors.New("must start with 'sk-'")
+        }
+        return nil
+    },
+    func(value APIKey) error {
+        if len(value) < 20 {
+            return errors.New("must be at least 20 characters")
+        }
+        return nil
+    },
+    func(value APIKey) error {
+        if !strings.HasSuffix(string(value), "==") {
+            return errors.New("must end with '=='")
+        }
+        return nil
+    },
+)
 ```
 
 ## Validation Order

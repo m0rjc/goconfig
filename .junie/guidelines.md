@@ -33,14 +33,14 @@ func TestExampleLoad(t *testing.T) {
     var cfg Config
     
     // Mock KeyStore
-    mockStore := func(ctx context.Context, key string) (string, bool, error) {
+    MockStore := func(ctx context.Context, key string) (string, bool, error) {
         if key == "PORT" {
             return "9000", true, nil
         }
         return "", false, nil
     }
 
-    err := Load(ctx, &cfg, WithKeyStore(mockStore))
+    err := Load(ctx, &cfg, WithKeyStore(MockStore))
     if err != nil {
         t.Fatalf("Failed to load: %v", err)
     }
@@ -52,9 +52,14 @@ func TestExampleLoad(t *testing.T) {
 ```
 
 #### 3. Additional Development Information
-- **Internal Pipeline**: The library uses a pipeline approach located in `internal/process`. Each field is processed by a `FieldProcessor` which is built based on the field type and tags.
-- **Type Handlers**: Type-specific logic is registered in `internal/process/typeregistry.go`. To add support for a new type, implement a `Handler` and register it in `kindParsers` or `specialTypeParsers`.
-- **Validation**: Validation is integrated into the processing pipeline. The `Pipe` function in `internal/process/types.go` is used to chain validators to processors.
+- **Internal Pipeline**: The library uses a pipeline approach located in `internal/readpipeline`. Each field is processed by a `FieldProcessor` which is built based on the field type and tags.
+- **Type Handlers**: The architecture uses a typed handler system (`TypedHandler[T]`).
+  - `FieldProcessor[T]`: Converts a string to type T.
+  - `Validator[T]`: Validates a value of type T.
+  - `Wrapper[T]`: A factory that wraps a `FieldProcessor` with validation based on struct tags.
+- **Type Registration**: Type-specific logic is registered in `internal/readpipeline/typeregistry.go`. To add support for a new type, implement a `PipelineBuilder` (often via `WrapTypedHandler`) and register it in `kindHandlers` or `specialTypeHandlers`.
+- **Validation**: Validation is integrated into the processing pipeline. The `Pipe` and `PipeMultiple` functions in `internal/readpipeline/typed_handler.go` are used to chain validators to processors.
+- **Custom Types**: Users can register custom handlers using `goconfig.WithHandler`. Built-in factories like `NewCustomHandler`, `NewEnumHandler`, `ReplaceParser`, and `AddValidators` are available.
 - **Struct Tags**:
   - `key`: The name of the environment variable/key in the store.
   - `default`: Default value if the key is missing.
@@ -62,4 +67,4 @@ func TestExampleLoad(t *testing.T) {
   - `keyRequired`: If "true", the key must be present (can be empty).
   - `min`, `max`: Range validation for numbers and durations.
   - `pattern`: Regex validation for strings.
-- **Reflection**: The core logic in `config.go` uses reflection to traverse structs. Ensure that fields are exported (start with an upper-case letter) so that they can be set by the library.
+- **Reflection**: The core logic in `config.go` uses reflection to traverse structs and `internal/readpipeline/process.go` to create the processing pipelines. Ensure that fields are exported (start with an upper-case letter).

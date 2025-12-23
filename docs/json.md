@@ -250,50 +250,10 @@ Common JSON errors:
 - **Type mismatches** - JSON field type doesn't match struct field type
 - **Missing required fields** - JSON doesn't include fields without `omitempty`
 
-## Best Practices
-
-1. **Use structs for known structure** - Better type safety and IDE support
-2. **Use maps for dynamic configuration** - When structure isn't known at compile time
-3. **Validate JSON types** - Ensure JSON field types match struct field types
-4. **Use pointers for optional JSON** - Distinguish between "not set" and "set to zero value"
-5. **Escape quotes in defaults** - Remember to escape quotes in `default` tags
-6. **Consider external files for complex JSON** - For very large JSON, consider loading from files instead
-
-## Example: Feature Flags
-
-JSON is great for feature flag configuration:
-
-```go
-type FeatureFlags struct {
-    EnableBetaFeatures bool     `json:"enable_beta_features"`
-    AllowedUsers       []string `json:"allowed_users"`
-    RolloutPercentage  int      `json:"rollout_percentage"`
-}
-
-type Config struct {
-    Features FeatureFlags `key:"FEATURE_FLAGS" default:"{\"enable_beta_features\":false,\"allowed_users\":[],\"rollout_percentage\":0}"`
-}
-
-func main() {
-    var config Config
-
-    // export FEATURE_FLAGS='{"enable_beta_features":true,"allowed_users":["alice","bob"],"rollout_percentage":25}'
-
-    if err := goconfig.Load(&config); err != nil {
-        log.Fatalf("Configuration error: %v", err)
-    }
-
-    if config.Features.EnableBetaFeatures {
-        fmt.Println("Beta features enabled")
-        fmt.Printf("Allowed users: %v\n", config.Features.AllowedUsers)
-        fmt.Printf("Rollout: %d%%\n", config.Features.RolloutPercentage)
-    }
-}
-```
 
 ## Combining with Other Features
 
-JSON fields work with all other goconfig features:
+JSON fields work with defaulting and required values.
 
 ```go
 type Config struct {
@@ -308,4 +268,4 @@ type Config struct {
 }
 ```
 
-Note: Validation with `min`, `max`, and `pattern` tags applies to the JSON string itself, not the deserialized values. Use custom validators for validating deserialized JSON content.
+There are no default validations such as `min`,`max`,`pattern` for JSON fields, apart from those provided by the JSON parser.

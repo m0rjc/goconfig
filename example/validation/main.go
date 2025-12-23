@@ -13,6 +13,11 @@ import (
 	"github.com/m0rjc/goconfig"
 )
 
+type APIKey string
+
+type APIEndpoint string
+type DatabaseHost string
+
 // ServerConfig demonstrates validation for server settings
 type ServerConfig struct {
 	// Port must be in the unprivileged range
@@ -44,7 +49,7 @@ type RateLimitConfig struct {
 // DatabaseConfig demonstrates pattern validation
 type DatabaseConfig struct {
 	// Host can be hostname or IP
-	Host string `key:"DB_HOST" default:"localhost"`
+	Host DatabaseHost `key:"DB_HOST" default:"localhost"`
 
 	// Port in standard database range
 	Port int `key:"DB_PORT" default:"5432" min:"1024" max:"65535"`
@@ -62,10 +67,10 @@ type DatabaseConfig struct {
 // APIConfig demonstrates custom validation
 type APIConfig struct {
 	// API key with custom validation
-	APIKey string `key:"API_KEY" required:"true"`
+	APIKey APIKey `key:"API_KEY" required:"true"`
 
 	// Endpoint URL with custom validation
-	Endpoint string `key:"API_ENDPOINT" default:"https://api.example.com"`
+	Endpoint APIEndpoint `key:"API_ENDPOINT" default:"https://api.example.com"`
 
 	// Retry settings
 	MaxRetries   int           `key:"API_MAX_RETRIES" default:"3" min:"0" max:"10"`
@@ -92,36 +97,42 @@ func main() {
 	// Load configuration with custom validators
 	err := goconfig.Load(context.Background(), &config,
 		// Validate API key format (must start with "sk-" and be at least 20 chars)
-		goconfig.WithValidator("API.APIKey", func(value any) error {
-			key := value.(string)
-			if !strings.HasPrefix(key, "sk-") {
-				return fmt.Errorf("API key must start with 'sk-'")
-			}
-			if len(key) < 20 {
-				return fmt.Errorf("API key must be at least 20 characters long")
-			}
-			return nil
-		}),
+		goconfig.WithCustomType[APIKey](goconfig.NewCustomType(
+			func(rawValue string) (APIKey, error) { return APIKey(rawValue), nil },
+			func(value APIKey) error {
+				key := string(value)
+				if !strings.HasPrefix(key, "sk-") {
+					return fmt.Errorf("API key must start with 'sk-'")
+				}
+				if len(key) < 20 {
+					return fmt.Errorf("API key must be at least 20 characters long")
+				}
+				return nil
+			})),
 
 		// Validate API endpoint is a valid URL with https
-		goconfig.WithValidator("API.Endpoint", func(value any) error {
-			endpoint := value.(string)
-			if !strings.HasPrefix(endpoint, "https://") {
-				return fmt.Errorf("API endpoint must use HTTPS")
-			}
-			return nil
-		}),
+		goconfig.WithCustomType[APIEndpoint](goconfig.NewCustomType(
+			func(rawValue string) (APIEndpoint, error) { return APIEndpoint(rawValue), nil },
+			func(value APIEndpoint) error {
+				endpoint := string(value)
+				if !strings.HasPrefix(endpoint, "https://") {
+					return fmt.Errorf("API endpoint must use HTTPS")
+				}
+				return nil
+			})),
 
 		// Validate database host is not a loopback address in production
-		goconfig.WithValidator("Database.Host", func(value any) error {
-			host := value.(string)
-			ip := net.ParseIP(host)
-			if ip != nil && ip.IsLoopback() {
-				// This is just an example - you might want to allow loopback in dev
-				fmt.Printf("Warning: Database host %s is a loopback address\n", host)
-			}
-			return nil
-		}),
+		goconfig.WithCustomType[DatabaseHost](goconfig.NewCustomType(
+			func(rawValue string) (DatabaseHost, error) { return DatabaseHost(rawValue), nil },
+			func(value DatabaseHost) error {
+				host := string(value)
+				ip := net.ParseIP(host)
+				if ip != nil && ip.IsLoopback() {
+					// This is just an example - you might want to allow loopback in dev
+					fmt.Printf("Warning: Database host %s is a loopback address\n", host)
+				}
+				return nil
+			})),
 	)
 
 	if err != nil {
@@ -170,7 +181,7 @@ func printConfig(config Config) {
 	fmt.Println()
 
 	fmt.Println("API Configuration:")
-	fmt.Printf("  APIKey:         %s (custom: must start with 'sk-', min 20 chars)\n", maskKey(config.API.APIKey))
+	fmt.Printf("  APIKey:         %s (custom: must start with 'sk-', min 20 chars)\n", maskKey(string(config.API.APIKey)))
 	fmt.Printf("  Endpoint:       %s (custom: must use HTTPS)\n", config.API.Endpoint)
 	fmt.Printf("  MaxRetries:     %d (range: 0-10)\n", config.API.MaxRetries)
 	fmt.Printf("  RetryBackoff:   %v (range: 100ms-30s)\n", config.API.RetryBackoff)
