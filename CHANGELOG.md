@@ -1,6 +1,15 @@
 # Changelog
 
-## [v1.0.0] - 2025-12-21
+## [v0.3.0] - 2025-12-23
+
+This is a return to 0.x versions due to the significance of the breaking changes. It's a real about turn in the
+mechanism for providing custom validation. If you've not been using custom validators, then nothing changes for you
+apart from the module rename.
+
+The AI-generated validation code was becoming messy, with switch statements all over the place. A pipeline mechanism
+was made which used a typed pipeline to convert from raw values to typed values. A custom types system was built on top
+of this, providing building blocks for custom validators. The raw building blocks are currently an internal package
+with much of their functionality exposed through functions and type aliases in the root `goconfig` package.
 
 ### Added
 
@@ -15,6 +24,7 @@
 ### Breaking Changes
 
 - **Module Rename**: The module was renamed from `goconfigtools` to `goconfig`. Its github repository was also renamed.
+- **Custom Type System**: The old parser and validation mechanism was replaced by a custom type system.
 
 ## [v1.0.0-beta.2] - 2025-12-20
 
