@@ -7,7 +7,7 @@ This guide covers advanced features for extending goconfig with custom behavior.
 - [Custom Types](#custom-types)
 - [Custom Key Stores](#custom-key-stores)
 - [Composite Key Stores](#composite-key-stores)
-- [Error Handling](#error-handling)
+- [Error Handling and Structured Logging](#error-handling)
 
 ## Custom Types
 
@@ -59,7 +59,7 @@ func main() {
 }
 ```
 
-### Use Cases for Custom Types
+### Example Use Cases for Custom Types
 
 #### Parsing URLs
 
@@ -88,35 +88,6 @@ func main() {
 
     err := goconfig.Load(context.Background(), &cfg,
         goconfig.WithCustomType[DatabaseURL](urlHandler),
-    )
-}
-```
-
-#### Parsing Custom Time Formats
-
-```go
-type Timestamp time.Time
-
-type Config struct {
-    Timestamp Timestamp `key:"TIMESTAMP"`
-}
-
-func main() {
-    var cfg Config
-
-    timestampHandler := goconfig.NewCustomHandler(
-        func(rawValue string) (Timestamp, error) {
-            // Parse RFC3339 format
-            t, err := time.Parse(time.RFC3339, rawValue)
-            if err != nil {
-                return Timestamp{}, fmt.Errorf("invalid timestamp format: %w", err)
-            }
-            return Timestamp(t), nil
-        },
-    )
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithCustomType[Timestamp](timestampHandler),
     )
 }
 ```
@@ -155,57 +126,30 @@ func main() {
 }
 ```
 
-#### Parsing Binary Data
-
-```go
-type EncryptionKey []byte
-
-type Config struct {
-    EncryptionKey EncryptionKey `key:"ENCRYPTION_KEY"`
-}
-
-func main() {
-    var cfg Config
-
-    keyHandler := goconfig.NewCustomHandler(
-        func(rawValue string) (EncryptionKey, error) {
-            // Decode base64-encoded key
-            key, err := base64.StdEncoding.DecodeString(rawValue)
-            if err != nil {
-                return nil, fmt.Errorf("invalid base64: %w", err)
-            }
-            if len(key) != 32 {
-                return nil, fmt.Errorf("encryption key must be 32 bytes, got %d", len(key))
-            }
-            return EncryptionKey(key), nil
-        },
-    )
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithCustomType[EncryptionKey](keyHandler),
-    )
-}
-```
 
 ### Parser Error Handling
 
-Custom type parsers should return descriptive errors:
+Custom type parsers should return descriptive errors. For security best practice you should avoid returning the input value.
+This avoids the like of `Failed to parse value 'Top Secret' for field 'API_KEY` appearing in logs.
 
 ```go
 customHandler := goconfig.NewCustomHandler(
     func(rawValue string) (MyType, error) {
         // Good: Descriptive error
-        return MyType{}, fmt.Errorf("invalid format: expected 'key=value', got '%s'", rawValue)
+        return MyType{}, fmt.Errorf("invalid format: expected 'key=value'")
 
         // Bad: Generic error
         return MyType{}, fmt.Errorf("parse error")
+
+        // Bad: Potentially leaving secrets in logs
+        return MyType{}, fmt.Errorf("parse error: expected 'key=value', got '%s'", rawValue)
     },
 )
 ```
 
 The error will be wrapped with field context automatically:
 ```
-invalid value for FIELD: invalid format: expected 'key=value', got 'invalid-input'
+invalid value for FIELD: invalid format: expected 'key=value'
 ```
 
 ## Custom Key Stores
@@ -224,178 +168,9 @@ type KeyStore func(ctx context.Context, key string) (value string, found bool, e
 - **found**: Whether the key was found (distinguishes "not found" from "found but empty")
 - **error**: Any error that occurred during lookup
 
-### Reading from a File
-
-```go
-func fileKeyStore(filename string) goconfig.KeyStore {
-    return func(ctx context.Context, key string) (string, bool, error) {
-        data, err := os.ReadFile(filename)
-        if err != nil {
-            return "", false, fmt.Errorf("failed to read config file: %w", err)
-        }
-
-        // Parse simple KEY=VALUE format
-        lines := strings.Split(string(data), "\n")
-        for _, line := range lines {
-            line = strings.TrimSpace(line)
-            if line == "" || strings.HasPrefix(line, "#") {
-                continue
-            }
-
-            parts := strings.SplitN(line, "=", 2)
-            if len(parts) == 2 && parts[0] == key {
-                return parts[1], true, nil
-            }
-        }
-
-        return "", false, nil
-    }
-}
-
-func main() {
-    var cfg Config
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithKeyStore(fileKeyStore("/etc/myapp/config")),
-    )
-}
-```
-
-### Reading from AWS Secrets Manager
-
-```go
-func awsSecretsKeyStore(secretsClient *secretsmanager.Client, secretName string) goconfig.KeyStore {
-    return func(ctx context.Context, key string) (string, bool, error) {
-        result, err := secretsClient.GetSecretValue(ctx, &secretsmanager.GetSecretValueInput{
-            SecretId: aws.String(secretName),
-        })
-        if err != nil {
-            return "", false, fmt.Errorf("failed to get secret: %w", err)
-        }
-
-        // Parse JSON secret
-        var secrets map[string]string
-        if err := json.Unmarshal([]byte(*result.SecretString), &secrets); err != nil {
-            return "", false, fmt.Errorf("failed to parse secret: %w", err)
-        }
-
-        value, found := secrets[key]
-        return value, found, nil
-    }
-}
-```
-
-### Reading from HashiCorp Vault
-
-```go
-func vaultKeyStore(client *vault.Client, path string) goconfig.KeyStore {
-    return func(ctx context.Context, key string) (string, bool, error) {
-        secret, err := client.KVv2("secret").Get(ctx, path)
-        if err != nil {
-            return "", false, fmt.Errorf("failed to read from vault: %w", err)
-        }
-
-        value, found := secret.Data[key].(string)
-        if !found {
-            return "", false, nil
-        }
-
-        return value, true, nil
-    }
-}
-```
-
-### In-Memory Key Store (for testing)
-
-```go
-func mapKeyStore(data map[string]string) goconfig.KeyStore {
-    return func(ctx context.Context, key string) (string, bool, error) {
-        value, found := data[key]
-        return value, found, nil
-    }
-}
-
-func TestConfig(t *testing.T) {
-    var cfg Config
-
-    testData := map[string]string{
-        "PORT":    "8080",
-        "HOST":    "localhost",
-        "API_KEY": "sk-test-key-12345678901234",
-    }
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithKeyStore(mapKeyStore(testData)),
-    )
-
-    if err != nil {
-        t.Fatalf("Failed to load config: %v", err)
-    }
-}
-```
-
-## Composite Key Stores
+### Composite Key Stores
 
 `CompositeStore` chains multiple key stores together, trying each in order until one returns a value.
-
-### Environment Variables with File Fallback
-
-```go
-func main() {
-    var cfg Config
-
-    // Try environment first, then fall back to config file
-    store := goconfig.CompositeStore(
-        goconfig.EnvironmentKeyStore,
-        fileKeyStore("/etc/myapp/config"),
-    )
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithKeyStore(store),
-    )
-}
-```
-
-### Secrets Manager with Environment Variable Override
-
-```go
-func main() {
-    var cfg Config
-
-    // Environment variables can override secrets manager
-    store := goconfig.CompositeStore(
-        goconfig.EnvironmentKeyStore,
-        awsSecretsKeyStore(secretsClient, "prod/myapp"),
-    )
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithKeyStore(store),
-    )
-}
-```
-
-### Multi-Stage Fallback
-
-```go
-func main() {
-    var cfg Config
-
-    // Try multiple sources in order:
-    // 1. Environment variables (highest priority)
-    // 2. Vault secrets
-    // 3. Local config file
-    // 4. Default values in struct tags (automatic fallback)
-    store := goconfig.CompositeStore(
-        goconfig.EnvironmentKeyStore,
-        vaultKeyStore(vaultClient, "secret/myapp"),
-        fileKeyStore("/etc/myapp/config"),
-    )
-
-    err := goconfig.Load(context.Background(), &cfg,
-        goconfig.WithKeyStore(store),
-    )
-}
-```
 
 ## Error Handling
 
@@ -421,27 +196,29 @@ if err != nil {
 
 ### Structured Logging
 
-See `LogError` function in `errors.go` for an example of logging configuration errors to structured logs:
+goconfig provides helper functions for structured logging with `slog`:
 
 ```go
-func LogError(logger *slog.Logger, err error) {
-    var configErrs *ConfigErrors
-    if errors.As(err, &configErrs) {
-        for _, e := range configErrs.Unwrap() {
-            var fieldErr *FieldError
-            if errors.As(e, &fieldErr) {
-                logger.Error("configuration error",
-                    "field", fieldErr.Field,
-                    "key", fieldErr.Key,
-                    "error", fieldErr.Err,
-                )
-            }
-        }
-    }
+logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+
+err := goconfig.Load(context.Background(), &config)
+if err != nil {
+    // Log all the errors with a customized log message
+    goconfig.LogError(logger, err, goconfig.WithLogMessage("config_validation_failed"))
+}
+```
+
+Alternatively, use `ConfigErrors.LogAll()` for more control:
+
+```go
+if configErrs, ok := err.(*goconfig.ConfigErrors); ok {
+    configErrs.LogAll(logger, goconfig.WithLogMessage("configuration_error"))
 }
 ```
 
 ### Checking Specific Error Types
+
+The goconfig.ConfigErrors type provides the `Unwrap()` method, so implementing the `errors.Is`, `errors.As` contract.
 
 ```go
 err := goconfig.Load(context.Background(), &config)
@@ -494,15 +271,3 @@ func main() {
 }
 ```
 
-## Best Practices
-
-1. **Use custom types for domain validation** - Create custom types (e.g., `APIKey`, `Email`) instead of using raw strings for fields that need validation
-2. **Leverage type safety** - Use the type system's generics for compile-time type safety
-3. **Reuse type handlers** - Define handlers once and use them across multiple fields of the same type
-4. **Use CompositeStore for flexibility** - Allow environment overrides in production
-5. **Cache key store results** - Avoid repeated API calls for the same key
-6. **Handle context cancellation** - Respect context timeouts in custom key stores
-7. **Return descriptive errors** - Help users understand what went wrong
-8. **Test with in-memory stores** - Use `mapKeyStore` for unit tests
-9. **Fail fast on key store errors** - Don't silently ignore lookup failures
-10. **Use `NewEnumHandler` for enums** - Automatic validation for string-based enum types
