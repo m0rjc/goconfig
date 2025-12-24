@@ -1,5 +1,24 @@
 # Changelog
 
+## [v0.4.0] - 2025-12-24
+
+This release feeds back some things I've found using the package in a larger project.
+This is an interim release. I'll add some issues to GitHub for things I'd like to add in future releases.
+
+### Added
+
+Improvements to goconfig:
+* Support for `*url.URL` type
+  - Support for pointer types in the read pipeline
+  - Separate the read pipeline code and the built-in types code for easier navigation
+
+Improvements to samples:
+* Example of using custom type handlers
+* Example of using custom validation tags
+  - Improvements to the helper methods in goconfig's `custom_types.go` to make this easier.
+* Example of combining keystores using CompositeStore.
+  - A simple store that reads values from a Properties file.
+
 ## [v0.3.0] - 2025-12-23
 
 This is a return to 0.x versions due to the significance of the breaking changes. It's a real about turn in the
