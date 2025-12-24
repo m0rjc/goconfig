@@ -32,7 +32,10 @@ func LoadConfig() (*Config, error) {
 		fakeSecretsKeyStore,
 		goconfig.EnvironmentKeyStore,
 		goconfig.NewEnvFileKeyStore("env.example"))
-	if err := goconfig.Load(context.Background(), &config, goconfig.WithKeyStore(keystore)); err != nil {
+
+	if err := goconfig.Load(context.Background(), &config,
+		goconfig.WithKeyStore(keystore),
+		goconfig.WithCustomType(newUrlCustomType())); err != nil {
 		return nil, err
 	}
 	return &config, nil

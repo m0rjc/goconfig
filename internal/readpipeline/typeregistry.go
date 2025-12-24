@@ -1,6 +1,7 @@
 package readpipeline
 
 import (
+	"net/url"
 	"reflect"
 	"time"
 )
@@ -9,7 +10,7 @@ import (
 type HandlerFactory func(t reflect.Type) PipelineBuilder
 
 // TypedHandlerFactory is a function that returns a TypedHandler for a given type.
-type TypedHandlerFactory[T any] func(t reflect.Type) TypedHandler[any]
+type TypedHandlerFactory[T any] func(t reflect.Type) TypedHandler[T]
 
 type TypeRegistry interface {
 	RegisterType(t reflect.Type, handler PipelineBuilder)
@@ -62,6 +63,11 @@ func (r *rootTypeRegistry) RegisterType(t reflect.Type, handler PipelineBuilder)
 	r.specialTypeHandlers[t] = handler
 }
 
+// RegisterKind registers a factory method for a given Kind.
+func (r *rootTypeRegistry) RegisterKind(kind reflect.Kind, factory HandlerFactory) {
+	r.kindHandlers[kind] = factory
+}
+
 // HandlerFor returns the PipelineBuilder for the given type, or nil if none is registered.
 func (r *rootTypeRegistry) HandlerFor(t reflect.Type) PipelineBuilder {
 	// 1. Check for specific type overrides (The "Duration" check)
@@ -95,31 +101,39 @@ func (a typedHandlerAdapter[T]) Build(tags reflect.StructTag) (FieldProcessor[an
 	}, nil
 }
 
-// WrapTypedHandler wraps a TypedHandler[T] as a PipelineBuilder.
+// WrapTypedHandler wraps a TypedHandler[T] as a PipelineBuilder for use in the typeless registry.
 func WrapTypedHandler[T any](handler TypedHandler[T]) PipelineBuilder {
 	return typedHandlerAdapter[T]{Handler: handler}
+}
+
+// WrapKindHandler wraps a TypedHandlerFactory[T] as a HandlerFactory for use in the typeless registry.
+func WrapKindHandler[T any](handler TypedHandlerFactory[T]) HandlerFactory {
+	return func(t reflect.Type) PipelineBuilder {
+		return WrapTypedHandler(handler(t))
+	}
 }
 
 var rootRegistry = &rootTypeRegistry{
 	specialTypeHandlers: map[reflect.Type]PipelineBuilder{
 		reflect.TypeOf(time.Duration(0)): WrapTypedHandler(durationTypeHandler),
+		reflect.TypeOf((*url.URL)(nil)):  WrapTypedHandler(NewUrlTypedHandler()),
 	},
 	kindHandlers: map[reflect.Kind]HandlerFactory{
-		reflect.Int:     func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewIntHandler(t)) },
-		reflect.Int8:    func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewIntHandler(t)) },
-		reflect.Int16:   func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewIntHandler(t)) },
-		reflect.Int32:   func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewIntHandler(t)) },
-		reflect.Int64:   func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewIntHandler(t)) },
-		reflect.Uint:    func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewUintHandler(t)) },
-		reflect.Uint8:   func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewUintHandler(t)) },
-		reflect.Uint16:  func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewUintHandler(t)) },
-		reflect.Uint32:  func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewUintHandler(t)) },
-		reflect.Uint64:  func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewUintHandler(t)) },
-		reflect.Struct:  func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewJsonPipelineBuilder(t)) },
-		reflect.Map:     func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewJsonPipelineBuilder(t)) },
-		reflect.String:  func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewStringHandler(t)) },
-		reflect.Bool:    func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewBoolHandler(t)) },
-		reflect.Float32: func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewFloatHandler(t)) },
-		reflect.Float64: func(t reflect.Type) PipelineBuilder { return WrapTypedHandler(NewFloatHandler(t)) },
+		reflect.Int:     WrapKindHandler(NewIntHandler),
+		reflect.Int8:    WrapKindHandler(NewIntHandler),
+		reflect.Int16:   WrapKindHandler(NewIntHandler),
+		reflect.Int32:   WrapKindHandler(NewIntHandler),
+		reflect.Int64:   WrapKindHandler(NewIntHandler),
+		reflect.Uint:    WrapKindHandler(NewUintHandler),
+		reflect.Uint8:   WrapKindHandler(NewUintHandler),
+		reflect.Uint16:  WrapKindHandler(NewUintHandler),
+		reflect.Uint32:  WrapKindHandler(NewUintHandler),
+		reflect.Uint64:  WrapKindHandler(NewUintHandler),
+		reflect.Struct:  WrapKindHandler(NewJsonPipelineBuilder),
+		reflect.Map:     WrapKindHandler(NewJsonPipelineBuilder),
+		reflect.String:  WrapKindHandler(NewStringHandler),
+		reflect.Bool:    WrapKindHandler(NewBoolHandler),
+		reflect.Float32: WrapKindHandler(NewFloatHandler),
+		reflect.Float64: WrapKindHandler(NewFloatHandler),
 	},
 }

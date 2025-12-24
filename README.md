@@ -82,6 +82,7 @@ go run main.go
 | `min` | Minimum value (numbers, durations) | `min:"1024"` |
 | `max` | Maximum value (numbers, durations) | `max:"65535"` |
 | `pattern` | Regex pattern for strings | `pattern:"^[a-z]+$"` |
+| `scheme` | Command separated list of schemes for `*url.URL` |  `scheme:"http,https"` |
 | `required` | Must be present and non-empty | `required:"true"` |
 | `keyRequired` | Must be present (can be empty) | `keyRequired:"true"` |
 

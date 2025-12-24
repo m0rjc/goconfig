@@ -1,6 +1,6 @@
 # Custom Tags
 
-This takes the [URL example](../urls/README.md) and reimplements the `SecureURL` type using a custom tag. This change
+This takes the [URL example](../custom_types/README.md) and reimplements the `SecureURL` type using a custom tag. This change
 allows the `net.URL` type to be used throughout the config so avoiding the need to cast. This is a great improvement on
 the URL sample.
 

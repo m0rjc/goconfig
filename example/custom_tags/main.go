@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	config2 "github.com/m0rjc/goconfig/example/urls/config"
+	config2 "github.com/m0rjc/goconfig/example/custom_types/config"
 )
 
 func main() {
