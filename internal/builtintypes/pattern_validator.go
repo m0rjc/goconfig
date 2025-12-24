@@ -1,13 +1,15 @@
-package readpipeline
+package builtintypes
 
 import (
 	"fmt"
 	"reflect"
 	"regexp"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
 // WrapProcessUsingPatternTag applies the pattern tag validation if present.
-func WrapProcessUsingPatternTag(tags reflect.StructTag, processor FieldProcessor[string]) (FieldProcessor[string], error) {
+func WrapProcessUsingPatternTag(tags reflect.StructTag, processor readpipeline.FieldProcessor[string]) (readpipeline.FieldProcessor[string], error) {
 	patternTag, hasPattern := tags.Lookup("pattern")
 
 	if hasPattern {
@@ -15,7 +17,7 @@ func WrapProcessUsingPatternTag(tags reflect.StructTag, processor FieldProcessor
 		if err != nil {
 			return nil, err
 		}
-		return Pipe(processor, func(value string) error {
+		return readpipeline.Pipe(processor, func(value string) error {
 			if !pattern.MatchString(value) {
 				return fmt.Errorf("does not match pattern %s", patternTag)
 			}

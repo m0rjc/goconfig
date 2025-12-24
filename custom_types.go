@@ -4,6 +4,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/m0rjc/goconfig/internal/builtintypes"
 	"github.com/m0rjc/goconfig/internal/customtypes"
 	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
@@ -19,7 +20,7 @@ type TypedHandler[T any] = readpipeline.TypedHandler[T]
 type Transform[T, U any] = customtypes.Transform[T, U]
 
 func RegisterCustomType[T any](handler TypedHandler[T]) {
-	readpipeline.RegisterType[T](handler)
+	builtintypes.RegisterType[T](handler)
 }
 
 func NewCustomType[T any](customParser FieldProcessor[T], customValidators ...Validator[T]) TypedHandler[T] {
@@ -72,25 +73,25 @@ func TransformCustomType[T, U any](baseHandler TypedHandler[T], transform Transf
 }
 
 func DefaultStringType[T ~string]() TypedHandler[T] {
-	pipeline := readpipeline.NewTypedStringHandler()
+	pipeline := builtintypes.NewTypedStringHandler()
 	return CastCustomType[string, T](pipeline)
 }
 
 func DefaultIntegerType[T ~int | ~int8 | ~int16 | ~int32 | ~int64]() TypedHandler[T] {
 	t := reflect.TypeOf(T(0))
-	return CastCustomType[int64, T](readpipeline.NewTypedIntHandler(t.Bits()))
+	return CastCustomType[int64, T](builtintypes.NewTypedIntHandler(t.Bits()))
 }
 
 func DefaultUnsignedIntegerType[T ~uint | ~uint8 | ~uint16 | ~uint32 | ~uint64]() TypedHandler[T] {
 	t := reflect.TypeOf(T(0))
-	return CastCustomType[uint64, T](readpipeline.NewTypedUintHandler(t.Bits()))
+	return CastCustomType[uint64, T](builtintypes.NewTypedUintHandler(t.Bits()))
 }
 
 func DefaultFloatIntegerType[T ~float32 | ~float64]() TypedHandler[T] {
 	t := reflect.TypeOf(T(0))
-	return CastCustomType[float64, T](readpipeline.NewTypedFloatHandler(t.Bits()))
+	return CastCustomType[float64, T](builtintypes.NewTypedFloatHandler(t.Bits()))
 }
 
 func DefaultDurationType() TypedHandler[time.Duration] {
-	return readpipeline.NewTypedDurationHandler()
+	return builtintypes.NewTypedDurationHandler()
 }

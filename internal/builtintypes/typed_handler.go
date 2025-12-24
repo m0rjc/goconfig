@@ -1,17 +1,21 @@
-package readpipeline
+package builtintypes
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
+)
 
 // typeHandlerImpl is the strongly typed handler for the given pipeline.
 // It implements the typeless PipelineBuilder interface for the pipeline by boxing and unboxing the value as required.
 type typeHandlerImpl[T any] struct {
 	// Parser is the strongly typed version of the FieldProcessor that acts as input for this readpipeline
-	Parser FieldProcessor[T]
+	Parser readpipeline.FieldProcessor[T]
 	// ValidationWrapper is a factory that wraps the FieldProcessor with validation stages
-	ValidationWrapper Wrapper[T]
+	ValidationWrapper readpipeline.Wrapper[T]
 }
 
-func (h *typeHandlerImpl[T]) BuildPipeline(tags reflect.StructTag) (FieldProcessor[T], error) {
+func (h *typeHandlerImpl[T]) BuildPipeline(tags reflect.StructTag) (readpipeline.FieldProcessor[T], error) {
 	pipeline := h.Parser
 	if pipeline == nil {
 		return nil, nil

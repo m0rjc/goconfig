@@ -1,12 +1,14 @@
-package readpipeline
+package builtintypes
 
 import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
-func NewJsonPipelineBuilder(targetType reflect.Type) TypedHandler[any] {
+func NewJsonPipelineBuilder(targetType reflect.Type) readpipeline.TypedHandler[any] {
 	return &typeHandlerImpl[any]{
 		Parser: func(rawValue string) (any, error) {
 			ptr := reflect.New(targetType).Interface()
@@ -22,7 +24,7 @@ func NewJsonPipelineBuilder(targetType reflect.Type) TypedHandler[any] {
 			return reflect.ValueOf(ptr).Elem().Interface(), nil
 		},
 
-		ValidationWrapper: func(tags reflect.StructTag, inputProcess FieldProcessor[any]) (FieldProcessor[any], error) {
+		ValidationWrapper: func(tags reflect.StructTag, inputProcess readpipeline.FieldProcessor[any]) (readpipeline.FieldProcessor[any], error) {
 			return inputProcess, nil
 		},
 	}
