@@ -1,8 +1,10 @@
-package readpipeline
+package builtintypes
 
 import (
 	"reflect"
 	"testing"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
 func TestIntTypes(t *testing.T) {
@@ -111,7 +113,7 @@ func TestIntTypes(t *testing.T) {
 
 	registry := NewTypeRegistry()
 	t.Run("invalid min tag", func(t *testing.T) {
-		_, err := New(reflect.TypeOf(int(0)), `min:"foo"`, registry)
+		_, err := readpipeline.New(reflect.TypeOf(int(0)), `min:"foo"`, registry)
 		if err == nil {
 			t.Error("expected error for invalid min tag, got nil")
 		}
@@ -119,7 +121,7 @@ func TestIntTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proc, err := New(tt.fieldType, tt.tags, registry)
+			proc, err := readpipeline.New(tt.fieldType, tt.tags, registry)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}
@@ -217,7 +219,7 @@ func TestUintTypes(t *testing.T) {
 	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proc, err := New(tt.fieldType, tt.tags, registry)
+			proc, err := readpipeline.New(tt.fieldType, tt.tags, registry)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}
@@ -267,7 +269,7 @@ func TestFloatTypes(t *testing.T) {
 	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proc, err := New(tt.fieldType, tt.tags, registry)
+			proc, err := readpipeline.New(tt.fieldType, tt.tags, registry)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}

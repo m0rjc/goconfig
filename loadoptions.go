@@ -3,6 +3,7 @@ package goconfig
 import (
 	"reflect"
 
+	"github.com/m0rjc/goconfig/internal/builtintypes"
 	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
@@ -39,7 +40,7 @@ type loadOptions struct {
 func newLoadOptions() *loadOptions {
 	return &loadOptions{
 		keyStore:     EnvironmentKeyStore,
-		typeRegistry: readpipeline.NewTypeRegistry(),
+		typeRegistry: builtintypes.NewTypeRegistry(),
 	}
 }
 

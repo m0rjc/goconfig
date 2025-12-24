@@ -15,11 +15,23 @@ func (m *mockPipelineBuilder) Build(tags reflect.StructTag) (FieldProcessor[any]
 	return m.buildFunc(tags)
 }
 
+// mockRegistry is a mock implementation of TypeRegistry for testing.
+type mockRegistry struct {
+	handlers map[reflect.Type]PipelineBuilder
+}
+
+func (m *mockRegistry) RegisterType(t reflect.Type, handler PipelineBuilder) {
+	m.handlers[t] = handler
+}
+
+func (m *mockRegistry) HandlerFor(t reflect.Type) PipelineBuilder {
+	return m.handlers[t]
+}
+
 func TestNew(t *testing.T) {
 	t.Run("BareType", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		expectedValue := "success"
@@ -50,9 +62,8 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("PointerType", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		expectedValue := 42
@@ -85,9 +96,8 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("NoHandlerError", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		_, err := New(reflect.TypeOf(0), "", registry)
@@ -102,9 +112,8 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("BuildError", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		expectedBuildErr := errors.New("build failed")
@@ -128,9 +137,8 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("NilPipelineError", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		mockBuilder := &mockPipelineBuilder{
@@ -154,9 +162,8 @@ func TestNew(t *testing.T) {
 	})
 
 	t.Run("ProcessorError", func(t *testing.T) {
-		registry := &rootTypeRegistry{
-			specialTypeHandlers: make(map[reflect.Type]PipelineBuilder),
-			kindHandlers:        make(map[reflect.Kind]HandlerFactory),
+		registry := &mockRegistry{
+			handlers: make(map[reflect.Type]PipelineBuilder),
 		}
 
 		expectedProcErr := errors.New("processing failed")

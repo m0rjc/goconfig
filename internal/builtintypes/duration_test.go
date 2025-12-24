@@ -1,9 +1,11 @@
-package readpipeline
+package builtintypes
 
 import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
 func TestDurationTypes(t *testing.T) {
@@ -46,7 +48,7 @@ func TestDurationTypes(t *testing.T) {
 	registry := NewTypeRegistry()
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			proc, err := New(tt.fieldType, tt.tags, registry)
+			proc, err := readpipeline.New(tt.fieldType, tt.tags, registry)
 			if err != nil {
 				t.Fatalf("New() error = %v", err)
 			}

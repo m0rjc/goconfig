@@ -1,4 +1,4 @@
-package readpipeline
+package builtintypes
 
 import (
 	"reflect"

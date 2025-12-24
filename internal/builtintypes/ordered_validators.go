@@ -1,9 +1,11 @@
-package readpipeline
+package builtintypes
 
 import (
 	"cmp"
 	"fmt"
 	"reflect"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
 // orderedValidator is a validator that checks a value is within a range. The value must be comparable.
@@ -37,7 +39,7 @@ func newRangeValidator[T cmp.Ordered](minimum, maximum T) orderedValidator[T] {
 }
 
 // WrapProcessUsingRangeTags applies the min and max tags to an ordered readpipeline.
-func WrapProcessUsingRangeTags[T cmp.Ordered](tags reflect.StructTag, processor FieldProcessor[T]) (FieldProcessor[T], error) {
+func WrapProcessUsingRangeTags[T cmp.Ordered](tags reflect.StructTag, processor readpipeline.FieldProcessor[T]) (readpipeline.FieldProcessor[T], error) {
 	minTag, hasMin := tags.Lookup("min")
 	maxTag, hasMax := tags.Lookup("max")
 
@@ -57,13 +59,13 @@ func WrapProcessUsingRangeTags[T cmp.Ordered](tags reflect.StructTag, processor 
 	}
 
 	if hasMin && hasMax {
-		return Pipe(processor, Validator[T](newRangeValidator(minimum, maximum))), nil
+		return readpipeline.Pipe(processor, readpipeline.Validator[T](newRangeValidator(minimum, maximum))), nil
 	}
 	if hasMin {
-		return Pipe(processor, Validator[T](newMinValidator(minimum))), nil
+		return readpipeline.Pipe(processor, readpipeline.Validator[T](newMinValidator(minimum))), nil
 	}
 	if hasMax {
-		return Pipe(processor, Validator[T](newMaxValidator(maximum))), nil
+		return readpipeline.Pipe(processor, readpipeline.Validator[T](newMaxValidator(maximum))), nil
 	}
 	return processor, nil
 }

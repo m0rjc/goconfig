@@ -1,4 +1,4 @@
-package readpipeline
+package builtintypes
 
 import (
 	"fmt"
@@ -6,23 +6,25 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+
+	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
-func NewUrlTypedHandler() TypedHandler[*url.URL] {
+func NewUrlTypedHandler() readpipeline.TypedHandler[*url.URL] {
 	return &typeHandlerImpl[*url.URL]{
 		Parser:            url.ParseRequestURI,
 		ValidationWrapper: wrapUrlPipeline,
 	}
 }
 
-func wrapUrlPipeline(tags reflect.StructTag, pipeline FieldProcessor[*url.URL]) (FieldProcessor[*url.URL], error) {
+func wrapUrlPipeline(tags reflect.StructTag, pipeline readpipeline.FieldProcessor[*url.URL]) (readpipeline.FieldProcessor[*url.URL], error) {
 	patternTag := tags.Get("pattern")
 	if patternTag != "" {
 		pattern, err := regexp.Compile(patternTag)
 		if err != nil {
 			return nil, err
 		}
-		pipeline = Pipe(pipeline, func(value *url.URL) error {
+		pipeline = readpipeline.Pipe(pipeline, func(value *url.URL) error {
 			if !pattern.MatchString(value.String()) {
 				return fmt.Errorf("does not match pattern %s", patternTag)
 			}
@@ -34,7 +36,7 @@ func wrapUrlPipeline(tags reflect.StructTag, pipeline FieldProcessor[*url.URL]) 
 	schemeTag := tags.Get("scheme")
 	if schemeTag != "" {
 		schemes := strings.Split(schemeTag, ",")
-		pipeline = Pipe(pipeline, func(value *url.URL) error {
+		pipeline = readpipeline.Pipe(pipeline, func(value *url.URL) error {
 			for _, scheme := range schemes {
 				if scheme == value.Scheme {
 					return nil
