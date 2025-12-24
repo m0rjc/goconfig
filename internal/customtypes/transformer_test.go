@@ -14,7 +14,7 @@ func TestNewTransformer(t *testing.T) {
 	})
 
 	t.Run("ValidConversion", func(t *testing.T) {
-		handler := NewTransformer[Source, Target](sourceHandler)
+		handler := NewCastingTransformer[Source, Target](sourceHandler)
 		pipeline, err := handler.BuildPipeline("")
 		if err != nil {
 			t.Fatalf("BuildPipeline failed: %v", err)
@@ -34,7 +34,7 @@ func TestNewTransformer(t *testing.T) {
 		// Actually, int to string conversion is allowed in Go but let's use something that is definitely not convertible
 		type Unrelated struct{ X int }
 
-		handler := NewTransformer[Source, Unrelated](sourceHandler)
+		handler := NewCastingTransformer[Source, Unrelated](sourceHandler)
 		_, err := handler.BuildPipeline("")
 		if err == nil {
 			t.Error("expected error for incompatible types, got nil")
@@ -45,7 +45,7 @@ func TestNewTransformer(t *testing.T) {
 		errHandler := NewParser[Source](func(rawValue string) (Source, error) {
 			return "", errors.New("upstream error")
 		})
-		handler := NewTransformer[Source, Target](errHandler)
+		handler := NewCastingTransformer[Source, Target](errHandler)
 		pipeline, err := handler.BuildPipeline("")
 		if err != nil {
 			t.Fatalf("BuildPipeline failed: %v", err)

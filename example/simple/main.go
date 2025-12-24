@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/url"
 	"time"
 
 	"github.com/m0rjc/goconfig"
@@ -11,8 +12,9 @@ import (
 
 // WebhookConfig holds webhook-related configuration
 type WebhookConfig struct {
-	Path    string        `key:"WEBHOOK_PATH" default:"webhook"`
-	Timeout time.Duration `key:"WEBHOOK_TIMEOUT"` // No default here
+	ServerUrl *url.URL      `key:"SERVER_URL" default:"http://localhost:8080" scheme:"http,https"`
+	Path      string        `key:"WEBHOOK_PATH" default:"webhook"`
+	Timeout   time.Duration `key:"WEBHOOK_TIMEOUT"` // No default here
 }
 
 // AIConfig holds AI-related configuration (OpenAI, conversation state, etc.)
@@ -38,6 +40,7 @@ func main() {
 
 	// Print the loaded configuration
 	fmt.Println("Configuration loaded successfully:")
+	fmt.Printf("  Webhook URL: %s\n", config.WebHook.ServerUrl)
 	fmt.Printf("  AI.APIKey: %s\n", maskAPIKey(config.AI.APIKey))
 	fmt.Printf("  AI.Model: %s\n", config.AI.Model)
 	fmt.Printf("  WebHook.Path: %s\n", config.WebHook.Path)

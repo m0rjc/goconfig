@@ -82,6 +82,7 @@ go run main.go
 | `min` | Minimum value (numbers, durations) | `min:"1024"` |
 | `max` | Maximum value (numbers, durations) | `max:"65535"` |
 | `pattern` | Regex pattern for strings | `pattern:"^[a-z]+$"` |
+| `scheme` | Command separated list of schemes for `*url.URL` |  `scheme:"http,https"` |
 | `required` | Must be present and non-empty | `required:"true"` |
 | `keyRequired` | Must be present (can be empty) | `keyRequired:"true"` |
 
@@ -171,6 +172,11 @@ export MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
 ```
 
 📚 **[JSON Guide](docs/json.md)**
+
+## Troubleshooting
+
+If you see an error about parsing JSON when you are not expecting a JSON value, check that the type is recognized.
+The JSON handling for struct types catches various types (such as `url.URL` before I added support for it)
 
 ## Documentation
 

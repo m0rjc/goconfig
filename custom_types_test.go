@@ -142,7 +142,7 @@ func TestAddDynamicValidation(t *testing.T) {
 		Val string `key:"VAL" check:"true"`
 	}
 
-	baseHandler := DefaultStringType()
+	baseHandler := DefaultStringType[string]()
 	handler := AddDynamicValidation(baseHandler, func(tags reflect.StructTag, inputProcess FieldProcessor[string]) (FieldProcessor[string], error) {
 		if tags.Get("check") == "true" {
 			return func(rawValue string) (string, error) {
@@ -196,7 +196,7 @@ func TestCastCustomType(t *testing.T) {
 
 func TestDefaultTypeHandlers(t *testing.T) {
 	t.Run("String", func(t *testing.T) {
-		handler := DefaultStringType()
+		handler := DefaultStringType[string]()
 		p, _ := handler.BuildPipeline("")
 		val, _ := p("hello")
 		if any(val).(string) != "hello" {

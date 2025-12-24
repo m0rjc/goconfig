@@ -7,9 +7,13 @@ import (
 	"github.com/m0rjc/goconfig/internal/readpipeline"
 )
 
+// Transform is a function that transforms a value of type T to a value of type U.
+type Transform[T, U any] func(T) (U, error)
+
+// transformer wraps a TypedHandler and applies a Transform function to the result.
 type transformer[T, U any] struct {
 	Prior readpipeline.TypedHandler[T]
-	Cast  func(T) (U, error)
+	Cast  Transform[T, U]
 }
 
 func (t *transformer[T, U]) BuildPipeline(tags reflect.StructTag) (readpipeline.FieldProcessor[U], error) {
@@ -40,7 +44,13 @@ func (b *badTransformer[T]) BuildPipeline(tags reflect.StructTag) (readpipeline.
 	return nil, b.Err
 }
 
-func NewTransformer[T, U any](handler readpipeline.TypedHandler[T]) readpipeline.TypedHandler[U] {
+// NewTransformer creates a TypedHandler that applies a Transform function to the result of the prior handler.
+func NewTransformer[T, U any](prior readpipeline.TypedHandler[T], transform Transform[T, U]) readpipeline.TypedHandler[U] {
+	return &transformer[T, U]{Prior: prior, Cast: transform}
+}
+
+// NewCastingTransformer creates a TypedHandler that casts the result of the prior handler to the target type.
+func NewCastingTransformer[T, U any](handler readpipeline.TypedHandler[T]) readpipeline.TypedHandler[U] {
 	sourceType := reflect.TypeOf((*T)(nil)).Elem()
 	newType := reflect.TypeOf((*U)(nil)).Elem()
 	if !sourceType.ConvertibleTo(newType) {

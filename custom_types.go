@@ -16,6 +16,8 @@ type Wrapper[T any] = readpipeline.Wrapper[T]
 
 type TypedHandler[T any] = readpipeline.TypedHandler[T]
 
+type Transform[T, U any] = customtypes.Transform[T, U]
+
 func RegisterCustomType[T any](handler TypedHandler[T]) {
 	readpipeline.RegisterType[T](handler)
 }
@@ -39,16 +41,39 @@ func AddValidators[T any](baseHandler TypedHandler[T], customValidators ...Valid
 	return baseHandler
 }
 
+// AddDynamicValidation allows a TypedHandler to add validation (or other logic) to the process pipeline dependent
+// on struct tags present on the target field.
+// See the AddValidatorToPipeline function and the example/custom_tags example for more details.
 func AddDynamicValidation[T any](baseHandler TypedHandler[T], wrapper Wrapper[T]) TypedHandler[T] {
 	return customtypes.AddWrapper(baseHandler, wrapper)
 }
 
-func CastCustomType[T, U any](baseHandler TypedHandler[T]) TypedHandler[U] {
-	return customtypes.NewTransformer[T, U](baseHandler)
+// AddValidatorToPipeline adds a validator to a pipeline. This is used as part of pipeline building in the TypedHandler.
+func AddValidatorToPipeline[T any](pipeline FieldProcessor[T], validator Validator[T]) FieldProcessor[T] {
+	return func(rawValue string) (T, error) {
+		value, err := pipeline(rawValue)
+		if err != nil {
+			return value, err
+		}
+		if err = validator(value); err != nil {
+			return value, err
+		}
+		return value, nil
+	}
 }
 
-func DefaultStringType() TypedHandler[string] {
-	return readpipeline.NewTypedStringHandler()
+func CastCustomType[T, U any](baseHandler TypedHandler[T]) TypedHandler[U] {
+	return customtypes.NewCastingTransformer[T, U](baseHandler)
+}
+
+// TransformCustomType creates a TypedHandler that applies a Transform function to process data from a base handler.
+func TransformCustomType[T, U any](baseHandler TypedHandler[T], transform Transform[T, U]) TypedHandler[U] {
+	return customtypes.NewTransformer(baseHandler, transform)
+}
+
+func DefaultStringType[T ~string]() TypedHandler[T] {
+	pipeline := readpipeline.NewTypedStringHandler()
+	return CastCustomType[string, T](pipeline)
 }
 
 func DefaultIntegerType[T ~int | ~int8 | ~int16 | ~int32 | ~int64]() TypedHandler[T] {

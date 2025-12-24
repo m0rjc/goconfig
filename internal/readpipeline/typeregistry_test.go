@@ -2,6 +2,7 @@ package readpipeline
 
 import (
 	"errors"
+	"net/url"
 	"reflect"
 	"testing"
 	"time"
@@ -258,6 +259,7 @@ func TestDefaultHandlers(t *testing.T) {
 		{"Float32", float32(0)},
 		{"Float64", float64(0)},
 		{"Duration", time.Duration(0)},
+		{"URL", (*url.URL)(nil)},
 		{"Struct", struct{ X int }{}},
 		{"Map", map[string]int{}},
 	}
