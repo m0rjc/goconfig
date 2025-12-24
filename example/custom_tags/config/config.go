@@ -14,6 +14,8 @@ type Config struct {
 	// WhatsAppPhoneId is the phone number ID for my phone number
 	WhatsAppPhoneId string `key:"WHATSAPP_PHONE_ID" required:"true" pattern:"^[0-9]+$"`
 	// WhatsAppServerUrl is the URL of the WhatsApp Business API server. This uses the custom "secure" tag defined by this example
+	// Note that the main goconfig package now provides its own URL support and uses a `scheme` tag to restrict accepted URL schemes.
+	// This example is for demonstration purposes only, to show how to use custom type validators.
 	WhatsAppServerUrl *url.URL `key:"WHATSAPP_SERVER_URL" required:"true" secure:"true" default:"https://api.whatsapp.com"`
 	// WhatsAppAuthToken is the authentication token for the WhatsApp Business API.
 	WhatsAppAuthToken string `key:"WHATSAPP_AUTH_TOKEN" required:"true"`
@@ -28,8 +30,10 @@ type Config struct {
 
 func LoadConfig() (*Config, error) {
 	var config Config
+
+	// Load configuration from environment variables and a local file.
+	// Environment variables take precedence over values in the local file.
 	keystore := goconfig.CompositeStore(
-		fakeSecretsKeyStore,
 		goconfig.EnvironmentKeyStore,
 		goconfig.NewEnvFileKeyStore("env.example"))
 
