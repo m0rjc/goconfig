@@ -172,6 +172,11 @@ export MODEL_PARAMS='{"temperature":0.7,"max_tokens":1000}'
 
 📚 **[JSON Guide](docs/json.md)**
 
+## Troubleshooting
+
+If you see an error about parsing JSON when you are not expecting a JSON value, check that the type is recognized.
+The JSON handling for struct types catches various types (such as `url.URL` before I added support for it)
+
 ## Documentation
 
 - 📖 **[Documentation Index](docs/)** - Complete guides and reference

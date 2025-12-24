@@ -11,15 +11,15 @@ import (
 // The caller is responsible for assigning the value to the struct field, dealing with pointers as needed.
 func New(fieldType reflect.Type, tags reflect.StructTag, registry TypeRegistry) (FieldProcessor[any], error) {
 	targetType := fieldType
-	isPointer := fieldType.Kind() == reflect.Ptr
+	handler := registry.HandlerFor(targetType)
 
-	if isPointer {
-		// Pointer writing is handled by the setFieldValue side of the readpipeline
-		// in config.go
-		targetType = targetType.Elem()
+	// If the target type is a pointer, try to find a handler for the underlying type
+	// Assignment back to the pointer will be handled by the caller's write pipeline
+	if handler == nil && fieldType.Kind() == reflect.Ptr {
+		targetType = fieldType.Elem()
+		handler = registry.HandlerFor(targetType)
 	}
 
-	handler := registry.HandlerFor(targetType)
 	if handler == nil {
 		return nil, fmt.Errorf("no handler for type %s", targetType)
 	}

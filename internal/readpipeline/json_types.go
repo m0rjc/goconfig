@@ -2,6 +2,7 @@ package readpipeline
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 )
 
@@ -12,7 +13,9 @@ func NewJsonPipelineBuilder(targetType reflect.Type) TypedHandler[any] {
 			err := json.Unmarshal([]byte(rawValue), ptr)
 
 			if err != nil {
-				return nil, err
+				// We arrive here quite often if the system has not recognized the type.
+				// Many types are structs under the covers.
+				return nil, fmt.Errorf("error parsing json: %w", err)
 			}
 
 			// Dereference the value to maintain consistency with the maxim "Pipelines always readpipeline values"

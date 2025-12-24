@@ -16,6 +16,8 @@ type Wrapper[T any] = readpipeline.Wrapper[T]
 
 type TypedHandler[T any] = readpipeline.TypedHandler[T]
 
+type Transform[T, U any] = customtypes.Transform[T, U]
+
 func RegisterCustomType[T any](handler TypedHandler[T]) {
 	readpipeline.RegisterType[T](handler)
 }
@@ -44,11 +46,17 @@ func AddDynamicValidation[T any](baseHandler TypedHandler[T], wrapper Wrapper[T]
 }
 
 func CastCustomType[T, U any](baseHandler TypedHandler[T]) TypedHandler[U] {
-	return customtypes.NewTransformer[T, U](baseHandler)
+	return customtypes.NewCastingTransformer[T, U](baseHandler)
 }
 
-func DefaultStringType() TypedHandler[string] {
-	return readpipeline.NewTypedStringHandler()
+// TransformCustomType creates a TypedHandler that applies a Transform function to process data from a base handler.
+func TransformCustomType[T, U any](baseHandler TypedHandler[T], transform Transform[T, U]) TypedHandler[U] {
+	return customtypes.NewTransformer(baseHandler, transform)
+}
+
+func DefaultStringType[T ~string]() TypedHandler[T] {
+	pipeline := readpipeline.NewTypedStringHandler()
+	return CastCustomType[string, T](pipeline)
 }
 
 func DefaultIntegerType[T ~int | ~int8 | ~int16 | ~int32 | ~int64]() TypedHandler[T] {
