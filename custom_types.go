@@ -41,8 +41,25 @@ func AddValidators[T any](baseHandler TypedHandler[T], customValidators ...Valid
 	return baseHandler
 }
 
+// AddDynamicValidation allows a TypedHandler to add validation (or other logic) to the process pipeline dependent
+// on struct tags present on the target field.
+// See the AddValidatorToPipeline function and the example/custom_tags example for more details.
 func AddDynamicValidation[T any](baseHandler TypedHandler[T], wrapper Wrapper[T]) TypedHandler[T] {
 	return customtypes.AddWrapper(baseHandler, wrapper)
+}
+
+// AddValidatorToPipeline adds a validator to a pipeline. This is used as part of pipeline building in the TypedHandler.
+func AddValidatorToPipeline[T any](pipeline FieldProcessor[T], validator Validator[T]) FieldProcessor[T] {
+	return func(rawValue string) (T, error) {
+		value, err := pipeline(rawValue)
+		if err != nil {
+			return value, err
+		}
+		if err = validator(value); err != nil {
+			return value, err
+		}
+		return value, nil
+	}
 }
 
 func CastCustomType[T, U any](baseHandler TypedHandler[T]) TypedHandler[U] {

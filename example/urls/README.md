@@ -48,5 +48,8 @@ simple inheritance as in other languages. My sample provides a `String()` method
 `net.URL` would print. By the time this is released I will have added native support for `net.URL` into `goconfig`
 with the ability to use struct tags to validate the scheme for `https`. This will remove the need for `SecureURL`.
 
-I could have used a custom `Wrapper` to add a `secure:bool` tag to the `URL` type. I will do this in another demonstration.
+I could have used a custom `Wrapper` to add a `secure:bool` tag to the `URL` type. 
+I will do this in another demonstration.
 The simplest solution using `goconfig` as of `v0.3.0` would have been to use the existing `pattern` tag.
+
+See ../custom_tags
